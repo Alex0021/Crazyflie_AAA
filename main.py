@@ -4,6 +4,7 @@ import time
 from threading import Event
 from pynput import keyboard
 from mycontrol import get_command
+from occupancyMap import OccupancyMap
 
 import cflib.crtp
 from cflib.crazyflie import Crazyflie
@@ -33,6 +34,9 @@ class MyController:
 
         self._waiting_for_connection = True
         self.is_connected = False
+
+        # Initialize the occupancy map
+        self._occupancy_map = OccupancyMap()
 
     def _connected(self, link_uri):
         print('Connected to %s' % link_uri)
@@ -94,6 +98,7 @@ class MyController:
             'range_left': data['range.left'],
             'range_right': data['range.right']
         }
+        self._occupancy_map.update(sensor_data) # Update the Occupancy Map
         next_cmd = get_command(sensor_data)
 
     def _disconnected(self, link_uri):
