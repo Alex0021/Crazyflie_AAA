@@ -57,6 +57,7 @@ class OccupancyMap():
             plt.imshow(np.flip(map,1), vmin=-1, vmax=1, cmap='gray', origin='lower') # flip the map to match the coordinate system
             plt.savefig("map.png")
             plt.close()
+        self.t+=1
         return map
     
     # Add a boarder of obstacles around the perimeter of the occupancy map
