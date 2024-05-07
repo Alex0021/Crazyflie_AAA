@@ -52,9 +52,8 @@ class KeyboardController:
         self._waiting_for_connection = False
 
     def _connection_failed(self, link_uri, msg):
-        print('Connection to %s failed: %s' % (link_uri, msg))
+        #print('Connection to %s failed: %s' % (link_uri, msg))
         self.is_connected = False
-        self._waiting_for_connection = False
     
     def _connection_lost(self, link_uri, msg):
         print('Connection to %s lost: %s' % (link_uri, msg))
@@ -104,12 +103,14 @@ if __name__ == "__main__":
     # Create a KeyboardController object
     controller = KeyboardController()
 
+    str_connect = "Connecting."
     while controller._waiting_for_connection:
-        print(".", end="")
+        print(str_connect, end="\r")
+        str_connect += "."
         time.sleep(0.5)
 
     while controller.is_connected:
-        print("IN AIR" if controller.in_air else "ON GROUND")
+        print("IN AIR" if controller.in_air else "ON GROUND", end="\r")
         time.sleep(1)
 
     
