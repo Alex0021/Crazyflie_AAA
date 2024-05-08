@@ -98,7 +98,6 @@ class MyController:
             'range_left': data['range.left'],
             'range_right': data['range.right']
         }
-        self._occupancy_map.update(sensor_data) # Update the Occupancy Map
         next_cmd = get_command(sensor_data)
 
     def _disconnected(self, link_uri):
