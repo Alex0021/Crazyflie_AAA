@@ -6,7 +6,7 @@ import cv2
 
 # Global variables
 on_ground = True
-height_desired = 0.5
+height_desired = 0.4
 timer = None
 ctrl_timer = None
 startpos = None
@@ -17,7 +17,7 @@ goal = firstpass_goal
 canvas = None
 fwd_vel_prev = 0
 left_vel_prev = 0
-yaw_desired = 0.4
+yaw_desired = 0.0
 prev_pos = []
 num_loops_stuck = 0
 k_a = 1.0
@@ -99,7 +99,7 @@ def get_command(sensor_data):
                 mode = 'find goal'
         case 'find goal':
             
-            if t % 50 == 0:
+            if t % 10 == 0:
                 # Get Drone location
                 drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
 
@@ -650,7 +650,7 @@ def update_visualization(sensor_data, map, attractive_force, attractive_magnitud
     # Calculate Resultant Force in World Frame for Visualization
     resultant_force = (k_a*attractive_force) + (k_r*repulsive_force)
     
-    if t % 50 == 0:
+    if t % 1 == 0:
         #print(f'xglobal: {sensor_data["x_global"]}, yglobal: {sensor_data["y_global"]}')
         xdrone = int(sensor_data['y_global'] * 100)  # Swap X and Y axes
         ydrone = int(sensor_data['x_global'] * 100)  # Swap X and Y axes

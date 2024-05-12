@@ -4,6 +4,7 @@ import time
 from threading import Event
 from pynput import keyboard
 from my_control_andrew import get_command
+import math
 
 import cflib.crtp
 from cflib.crazyflie import Crazyflie
@@ -103,7 +104,7 @@ class KeyboardController:
             'x_global': data['stateEstimate.x']+0.5,
             'y_global': data['stateEstimate.y']+1.5,
             'z_global': data['stateEstimate.z'],
-            'yaw': data['stabilizer.yaw'],
+            'yaw': data['stabilizer.yaw']/180*math.pi,
             'range_down': data['range.zrange']/1000,
             'range_front': data['range.front']/1000,
             'range_back': data['range.back']/1000,
@@ -114,6 +115,7 @@ class KeyboardController:
             for name, value in self.sensor_data.items():
                 print(f'{name}: {value:3.3f} ', end='\n')
         cmd = get_command(self.sensor_data)
+        self._command = [cmd[0],cmd[1],cmd[4],cmd[3]]
         self.print_data += 1
 
 
