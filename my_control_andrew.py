@@ -6,7 +6,7 @@ import cv2
 
 # Global variables
 on_ground = True
-height_desired = 0.4
+height_desired = 0.5
 timer = None
 ctrl_timer = None
 startpos = None
@@ -131,7 +131,7 @@ def get_command(sensor_data):
 
                 # Update the previous position
                 prev_pos.append(drone_location)
-                if len(prev_pos) > 5:
+                if len(prev_pos) > 50:
                     prev_pos.pop(0)
             else:
                 control_command = [fwd_vel_prev, left_vel_prev, height_desired, yaw_desired]
@@ -527,7 +527,7 @@ def set_next_goal(possible_locations, drone_location):
     
     return goal
 
-def is_stuck(current_pos, prev_pos, threshold=0.2, N=5):
+def is_stuck(current_pos, prev_pos, threshold=0.2, N=50):
     """
     Check if the drone is stuck in one position. If more than N loops, then the drone is stuck.
     params:
@@ -549,16 +549,16 @@ def is_stuck(current_pos, prev_pos, threshold=0.2, N=5):
         first_landpad_location = None
         second_landpad_location = None 
         middle_landpad_location = None
-        if num_loops_stuck > 15 and num_loops_stuck < 20:
+        if num_loops_stuck > 150 and num_loops_stuck < 200:
             # print('Drone is stuck in one position for {} loops. Drone is Stuck! Change Goal Location.'.format(num_loops_stuck))
             goal = np.array([4.0, 0.3 ]) # Change the goal location
-        elif num_loops_stuck >= 15:
+        elif num_loops_stuck >= 150:
             # print('Drone is stuck in one position for {} loops. Drone is Stuck! Change Goal Location.'.format(num_loops_stuck))
             goal = np.array([4.0, 2.7]) # Change the goal location back to the original
         return True
     else:
         if num_loops_stuck > 0:
-            if num_loops_stuck > 20:
+            if num_loops_stuck > 200:
                 goal = firstpass_goal # Change the goal location back to the original
             # print('Drone is not stuck anymore!')
         num_loops_stuck = 0
@@ -651,7 +651,7 @@ def update_visualization(sensor_data, map, attractive_force, attractive_magnitud
     # Calculate Resultant Force in World Frame for Visualization
     resultant_force = (k_a*attractive_force) + (k_r*repulsive_force)
     
-    if t % 1 == 0:
+    if t % 50 == 0:
         #print(f'xglobal: {sensor_data["x_global"]}, yglobal: {sensor_data["y_global"]}')
         xdrone = int(sensor_data['y_global'] * 100)  # Swap X and Y axes
         ydrone = int(sensor_data['x_global'] * 100)  # Swap X and Y axes
