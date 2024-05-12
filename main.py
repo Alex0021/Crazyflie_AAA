@@ -27,6 +27,7 @@ class MyController:
         self._cf.connection_lost.add_callback(self._connection_lost)
 
         self.in_air = False
+        self.last_log_time = 0
 
         print('Connecting to %s' % URI)
 
@@ -45,6 +46,7 @@ class MyController:
 
         # The definition of the logconfig can be made before connecting
         self._lg_stab = LogConfig(name='Stabilizer', period_in_ms=50)
+        self.last_log_time = time.time()
         self._lg_stab.add_variable('stateEstimate.x', 'float')
         self._lg_stab.add_variable('stateEstimate.y', 'float')
         self._lg_stab.add_variable('stateEstimate.z', 'float')
@@ -98,7 +100,8 @@ class MyController:
             'range_left': data['range.left'],
             'range_right': data['range.right']
         }
-        next_cmd = get_command(sensor_data)
+        next_cmd = get_command(sensor_data, dt=time.time()-self.last_log_time)
+        self.last_log_time = time.time()
 
     def _disconnected(self, link_uri):
         print('Disconnected from %s' % link_uri)

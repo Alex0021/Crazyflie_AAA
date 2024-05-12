@@ -12,12 +12,13 @@ class OccupancyMap():
         self.res_pos = 0.1 # meter
         self.conf = 0.2 # certainty given by each measurement
         self.t = 0 # only for plotting TODO: Can we use this in the hardware version? This needs to be passed in.
-        self.map_size_x = self.max_x / self.res_pos # blocks
-        self.map_size_y = self.max_y / self.res_pos # blocks
+        self.map_size_x = int(self.max_x / self.res_pos) # blocks
+        self.map_size_y = int(self.max_y / self.res_pos) # blocks
         self.goal = None # current goal position
+        self.UPSCALE_FACTOR = 10
 
         self.map = np.zeros((int((self.max_x-self.min_x)/self.res_pos), int((self.max_y-self.min_y)/self.res_pos))) # 0 = unknown, 1 = free, -1 = occupied
-        self.canvas = np.zeros((self.map_size_y, self.map_size_x, 3), dtype=np.uint8) * 255  # Swap canvas dimensions
+        self.canvas = np.zeros((self.UPSCALE_FACTOR*self.map_size_x, self.UPSCALE_FACTOR*self.map_size_y, 3), dtype=np.uint8) * 255  # Swap canvas dimensions
 
     def update(self, sensor_data, goal, attractive_force, repulsive_force):
         pos_x = sensor_data['x_global']
@@ -42,20 +43,20 @@ class OccupancyMap():
                 idx_y = int(np.round((pos_y - self.min_y + dist*np.sin(yaw_sensor))/self.res_pos,0))
 
                 # make sure the current_setpoint is within the map
-                if idx_x < 0 or idx_x >= map.shape[0] or idx_y < 0 or idx_y >= map.shape[1] or dist > self.range_max:
+                if idx_x < 0 or idx_x >= self.map.shape[0] or idx_y < 0 or idx_y >= self.map.shape[1] or dist > self.range_max:
                     break
 
                 # update the map
                 if dist < measurement:
-                    map[idx_x, idx_y] += self.conf
+                    self.map[idx_x, idx_y] += self.conf
                 else:
-                    map[idx_x, idx_y] -= self.conf
+                    self.map[idx_x, idx_y] -= self.conf
                     break
         
-        map = np.clip(map, -1, 1) # certainty can never be more than 100%
+        self.map = np.clip(self.map, -1, 1) # certainty can never be more than 100%
 
         # Add a perimeter of obstacles around the occupancy map
-        map = self.add_perimeter_obstacles(map)
+        self.map = self.add_perimeter_obstacles(self.map)
 
         # only plot every Nth time step (comment out if not needed) 
         # TODO: Maybe dont use self.t
@@ -65,14 +66,14 @@ class OccupancyMap():
         #     plt.close()
         # self.t+=1
 
-        self.update_visualization(sensor_data, map, attractive_force, repulsive_force)
-        return map
+        self.update_visualization(sensor_data, self.map, attractive_force, repulsive_force)
+        return self.map
     
     def update_visualization(self, sensor_data, map, attractive_force, repulsive_force):
 
-        arrow_size = 10
-        map_size_x = 3 / self.res_pos 
-        map_size_y = 5 / self.res_pos
+        arrow_size = 20
+        map_size_x = int(5*self.UPSCALE_FACTOR / self.res_pos)
+        map_size_y = int(3*self.UPSCALE_FACTOR / self.res_pos)
         
         # TODO: If we pass these values in they act as gains for adjusting rhe attactive and repulsive forces
         k_a = 1
@@ -83,8 +84,8 @@ class OccupancyMap():
         
         if self.t % 50 == 0:
             # Swap X and Y axes for visualization
-            xdrone = int(sensor_data['y_global'] / self.res_pos)  # Swap X and Y axes
-            ydrone = int(sensor_data['x_global'] / self.res_pos)  # Swap X and Y axes
+            xdrone = int(self.UPSCALE_FACTOR*sensor_data['y_global'] / self.res_pos)  # Swap X and Y axes
+            ydrone = int(self.UPSCALE_FACTOR*sensor_data['x_global'] / self.res_pos)  # Swap X and Y axes
             xgoal = int(self.goal[1] / self.res_pos)  # Swap X and Y axes
             ygoal = int(self.goal[0] / self.res_pos)  # Swap X and Y axes
             
@@ -92,10 +93,10 @@ class OccupancyMap():
             self.canvas.fill(255)
             
             # Plot the map with upscaling (Comment out if maps are the same size)
-            map = np.kron(map, np.ones((10, 10)))
+            map = np.kron(map, np.ones((self.UPSCALE_FACTOR, self.UPSCALE_FACTOR)))
             idx_obstacles = np.where(map < 0)
 
-            self.canvas[map_size_y-idx_obstacles[0]-1, map_size_x-idx_obstacles[1]-1] = (0, 0, 255)  # Red
+            self.canvas[map_size_x-idx_obstacles[1]-1, map_size_y-idx_obstacles[0]-1] = (0, 0, 255)  # Red
             
             # Plot drone and goal positions
             cv2.circle(self.canvas, (map_size_x - xdrone, map_size_y - ydrone), 5, (0, 0, 255), -1)  # Red for drone, mirror X coordinate
@@ -111,19 +112,19 @@ class OccupancyMap():
             attractive_magnitude = np.linalg.norm(attractive_force)
             if attractive_magnitude != 0:
                 arrow_end_point = (map_size_x - (xdrone + int(attractive_force[1] * arrow_size)), map_size_y - (ydrone + int(attractive_force[0] * arrow_size)))
-                cv2.arrowedLine(self.canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (0, 255, 0), thickness=1, tipLength=0.3)
+                cv2.arrowedLine(self.canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (0, 255, 0), thickness=2, tipLength=0.3)
 
             # Plot the repulsive force vector
             repulsive_magnitude = np.linalg.norm(repulsive_force)
             if repulsive_magnitude != 0:
                 arrow_end_point = (map_size_x - (xdrone + int(repulsive_force[1] * arrow_size)), map_size_y - (ydrone + int(repulsive_force[0] * arrow_size)))
-                cv2.arrowedLine(self.canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (255, 0, 0), thickness=1, tipLength=0.3)
+                cv2.arrowedLine(self.canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (255, 0, 0), thickness=2, tipLength=0.3)
 
             # Plot the resultant force vector
             resultant_magnitude = np.linalg.norm(resultant_force)
             if resultant_magnitude != 0:
                 arrow_end_point = (map_size_x - (xdrone + int(resultant_force[1] * arrow_size)), map_size_y - (ydrone + int(resultant_force[0] * arrow_size)))
-                cv2.arrowedLine(self.canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (0, 0, 0), thickness=1, tipLength=0.3)
+                cv2.arrowedLine(self.canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (0, 0, 0), thickness=2, tipLength=0.3)
             
             # Show the updated canvas
             cv2.imshow("Map", self.canvas)

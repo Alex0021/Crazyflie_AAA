@@ -3,6 +3,7 @@ import sys
 import time
 from threading import Event
 from pynput import keyboard
+from mycontrol import get_command
 
 import cflib.crtp
 from cflib.crazyflie import Crazyflie
@@ -52,7 +53,11 @@ class KeyboardController:
         self._lg_stab.add_variable('stateEstimate.y', 'float')
         self._lg_stab.add_variable('stateEstimate.z', 'float')
         self._lg_stab.add_variable('stabilizer.yaw', 'float')
-
+        self._lg_stab.add_variable('range.front')
+        self._lg_stab.add_variable('range.back')
+        self._lg_stab.add_variable('range.left')
+        self._lg_stab.add_variable('range.right')
+        self._lg_stab.add_variable('range.zrange')
         try:
             self._cf.log.add_config(self._lg_stab)
             # This callback will receive the data
@@ -94,8 +99,20 @@ class KeyboardController:
         """Callback from a the log API when data arrives"""
         #print(f'[{timestamp}][{logconf.name}]: ', end='\r')
         for name, value in data.items():
-            print(f'{name}: {value:3.3f} ', end='')
-        print('', end='\r')
+            print(f'{name}: {value:3.3f} ', end='\n')
+        self.sensor_data = {
+            'x_global': data['stateEstimate.x'],
+            'y_global': data['stateEstimate.y'],
+            'z_global': data['stateEstimate.z'],
+            'yaw': data['stabilizer.yaw'],
+            'range_down': data['range.zrange'],
+            'range_front': data['range.front'],
+            'range_back': data['range.back'],
+            'range_left': data['range.left'],
+            'range_right': data['range.right']
+        }
+        get_command(self.sensor_data, 0)
+
 
     def _on_key_pressed(self, key):
         if 'char' in dir(key):
@@ -114,8 +131,7 @@ class KeyboardController:
         elif key == keyboard.Key.space:
             self._handle_spacebar()
         elif key == keyboard.Key.esc:
-            if self.in_air:
-                self._mc.land()
+            self._cf.commander.send_stop_setpoint()
             self._cf.close_link()
             self.is_connected = False
 
