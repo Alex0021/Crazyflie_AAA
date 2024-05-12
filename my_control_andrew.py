@@ -5,6 +5,8 @@ import time
 import cv2
 
 # Global variables
+STARTING_POSE = [0.5,1.5]
+UPDATE_FREQUENCY = 2
 on_ground = True
 height_desired = 0.4
 timer = None
@@ -34,7 +36,6 @@ num_possible_pads_locations = None
 possible_pad_locations = None
 list_of_visited_locations = np.empty((0,2), dtype=object)
 grid_switcher = 0
-UPDATE_FREQUENCY = 5
 grade = 0 # Change Grade to change type of control
 """
 Grade 4.0: Take off, avoid obstacles and reach the landing region whilst being airborne
@@ -70,12 +71,16 @@ def get_command(sensor_data):
     
     # Take off
     if startpos is None:
-        startpos = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['range_down']]    
+        startpos = [STARTING_POSE[0], STARTING_POSE[1], sensor_data['range_down']]    
     if on_ground and sensor_data['range_down'] < 0.3:
         control_command = [0.0, 0.0, height_desired, 0.0]
         return control_command
     else:
         on_ground = False
+
+    # adjust the relative position
+    sensor_data['x_global'] += startpos[0]
+    sensor_data['y_global'] += startpos[1]
 
     # ---- YOUR CODE HERE ----
     # Set Control Command
@@ -672,16 +677,15 @@ def update_visualization(sensor_data, map, attractive_force, attractive_magnitud
         canvas[map_size_y-idx_obstacles[0]-1, map_size_x-idx_obstacles[1]-1] = (0, 0, 255)  # Red
         # Plot Sensor Data
         text_position = (60, 20)  # Adjust as needed
-        cv2.putText(canvas, f'Range Down: : {sensor_data['range_down']}', text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
         # text_position = (text_position[0], text_position[1] + 20)  # Move text position down for next item
 
         # Plot Sensor Data
         text_position = (10, 350)  # Adjust as needed
-        cv2.putText(canvas, f'Range Down: {round(sensor_data['range_down'], 3)}', text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-        cv2.putText(canvas, f'Range Front: {round(sensor_data['range_front'], 3)}', (text_position[0], text_position[1] + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-        cv2.putText(canvas, f'Range Left: {round(sensor_data['range_left'], 3)}', (text_position[0], text_position[1] + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-        cv2.putText(canvas, f'Range Right: {round(sensor_data['range_right'], 3)}', (text_position[0], text_position[1] + 75), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-        cv2.putText(canvas, f'Range Back: {round(sensor_data['range_back'], 3)}', (text_position[0], text_position[1] + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Down: {round(sensor_data["range_down"], 3)}', text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Front: {round(sensor_data["range_front"], 3)}', (text_position[0], text_position[1] + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Left: {round(sensor_data["range_left"], 3)}', (text_position[0], text_position[1] + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Right: {round(sensor_data["range_right"], 3)}', (text_position[0], text_position[1] + 75), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Back: {round(sensor_data["range_back"], 3)}', (text_position[0], text_position[1] + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
         # Plot drone and goal positions
         cv2.circle(canvas, (map_size_x - xdrone, map_size_y - ydrone), 5, (0, 0, 255), -1)  # Red for drone, mirror X coordinate

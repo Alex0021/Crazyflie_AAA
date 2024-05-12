@@ -19,6 +19,7 @@ URI = uri_helper.uri_from_env(default="radio://0/40/2M/E7E7E7E704")
 BASE_VEL = 0.3
 DESIRED_HEIGHT = 0.4
 BASE_ANG_RATE = 30
+EMERGENCY_LANDING_UP_RANGE = 0.1
 
 class KeyboardController:
     def __init__(self):
@@ -31,6 +32,8 @@ class KeyboardController:
         self._cf.connection_lost.add_callback(self._connection_lost)
 
         self.in_air = False
+        self.is_ready = False
+        self.force_landing = False
         self.print_data = 0
 
         print('Connecting to %s' % URI)
@@ -100,9 +103,14 @@ class KeyboardController:
     def _stab_log_data(self, timestamp, data, logconf):
         """Callback from a the log API when data arrives"""
         #print(f'[{timestamp}][{logconf.name}]: ', end='\r')
+        if not self.is_ready or self.force_landing:
+            return
+        # if data['range.up'] < EMERGENCY_LANDING_UP_RANGE:
+        #     self._handle_spacebar()
+        #     return
         self.sensor_data = {
-            'x_global': data['stateEstimate.x']+0.5,
-            'y_global': data['stateEstimate.y']+1.5,
+            'x_global': data['stateEstimate.x'],
+            'y_global': data['stateEstimate.y'],
             'z_global': data['stateEstimate.z'],
             'yaw': data['stabilizer.yaw']/180*math.pi,
             'range_down': data['range.zrange']/1000,
@@ -120,6 +128,8 @@ class KeyboardController:
 
 
     def _on_key_pressed(self, key):
+        if not self.is_ready:
+            return
         if 'char' in dir(key):
             if key.char == "w":
                 self._command = [BASE_VEL,0,0,DESIRED_HEIGHT]
@@ -141,13 +151,18 @@ class KeyboardController:
             self.is_connected = False
 
     def _on_key_released(self, key):
+        if not self.is_ready:
+            return
         if 'char' in dir(key):
             if key in ["w", "s", "a", "d", "q", "e"]:
                 self._command = [0,0,0,DESIRED_HEIGHT]
 
     def _handle_spacebar(self):
-        if self.in_air:
+        if self.in_air or self.sensor_data['range_down'] > 0.2:
             self.in_air = False
+            self.force_landing = True
+            self.is_ready = False
+            print("LANDING...")
             # for y in range(10):
             #     self._cf.commander.send_hover_setpoint(0, 0, 0, (10 - y) / 25)
             #     time.sleep(0.1)
@@ -178,15 +193,15 @@ if __name__ == "__main__":
 
     print("INITIALIZING KALMAN ESTIMATOR", end="\r")
     cf.param.set_value('kalman.resetEstimation', '1')
-    time.sleep(0.1)
-    cf.param.set_value('kalman.resetEstimation', '0')
-    time.sleep(1)
+    time.sleep(0.5)
     print("INITIALIZING KALMAN ESTIMATOR: DONE")
+    controller.is_ready = True
 
     while controller.is_connected:
         #print("IN AIR" if controller.in_air else "ON GROUND", end="\r")
-        if controller.in_air:
+        #if controller.in_air:
+        if controller.is_ready:
             cf.commander.send_hover_setpoint(*controller._command)
-        time.sleep(0.1)
+        time.sleep(0.01)
 
     
