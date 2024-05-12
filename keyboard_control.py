@@ -115,7 +115,7 @@ class KeyboardController:
             for name, value in self.sensor_data.items():
                 print(f'{name}: {value:3.3f} ', end='\n')
         cmd = get_command(self.sensor_data)
-        self._command = [cmd[0],cmd[1],cmd[4],cmd[3]]
+        self._command = [cmd[0],cmd[1],cmd[3],cmd[2]]
         self.print_data += 1
 
 
