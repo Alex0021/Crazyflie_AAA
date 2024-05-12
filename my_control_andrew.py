@@ -12,12 +12,12 @@ ctrl_timer = None
 startpos = None
 timer_done = None
 mode = 'takeoff' # 'takeoff', 'find goal', 'land'
-firstpass_goal = np.array([4.5, 1.5]) # Location of the first goal
+firstpass_goal = np.array([4.5, 1]) # Location of the first goal
 goal = firstpass_goal
 canvas = None
 fwd_vel_prev = 0
 left_vel_prev = 0
-yaw_desired = 0.4
+yaw_desired = 0.3*180/np.pi
 prev_pos = []
 num_loops_stuck = 0
 k_a = 1.0
@@ -34,6 +34,7 @@ num_possible_pads_locations = None
 possible_pad_locations = None
 list_of_visited_locations = np.empty((0,2), dtype=object)
 grid_switcher = 0
+UPDATE_FREQUENCY = 5
 grade = 0 # Change Grade to change type of control
 """
 Grade 4.0: Take off, avoid obstacles and reach the landing region whilst being airborne
@@ -99,7 +100,7 @@ def get_command(sensor_data):
                 mode = 'find goal'
         case 'find goal':
             
-            if t % 50 == 0:
+            if t % UPDATE_FREQUENCY == 0:
                 # Get Drone location
                 drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
 
