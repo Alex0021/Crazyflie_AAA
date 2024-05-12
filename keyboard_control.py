@@ -180,7 +180,7 @@ if __name__ == "__main__":
     cf.param.set_value('kalman.resetEstimation', '1')
     time.sleep(0.1)
     cf.param.set_value('kalman.resetEstimation', '0')
-    time.sleep(2)
+    time.sleep(1)
     print("INITIALIZING KALMAN ESTIMATOR: DONE")
 
     while controller.is_connected:
