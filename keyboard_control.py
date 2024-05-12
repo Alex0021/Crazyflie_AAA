@@ -3,7 +3,7 @@ import sys
 import time
 from threading import Event
 from pynput import keyboard
-from mycontrol import get_command
+from my_control_andrew import get_command
 
 import cflib.crtp
 from cflib.crazyflie import Crazyflie
@@ -30,6 +30,7 @@ class KeyboardController:
         self._cf.connection_lost.add_callback(self._connection_lost)
 
         self.in_air = False
+        self.print_data = 0
 
         print('Connecting to %s' % URI)
 
@@ -98,20 +99,22 @@ class KeyboardController:
     def _stab_log_data(self, timestamp, data, logconf):
         """Callback from a the log API when data arrives"""
         #print(f'[{timestamp}][{logconf.name}]: ', end='\r')
-        for name, value in data.items():
-            print(f'{name}: {value:3.3f} ', end='\n')
         self.sensor_data = {
-            'x_global': data['stateEstimate.x'],
-            'y_global': data['stateEstimate.y'],
+            'x_global': data['stateEstimate.x']+0.5,
+            'y_global': data['stateEstimate.y']+1.5,
             'z_global': data['stateEstimate.z'],
             'yaw': data['stabilizer.yaw'],
-            'range_down': data['range.zrange'],
-            'range_front': data['range.front'],
-            'range_back': data['range.back'],
-            'range_left': data['range.left'],
-            'range_right': data['range.right']
+            'range_down': data['range.zrange']/1000,
+            'range_front': data['range.front']/1000,
+            'range_back': data['range.back']/1000,
+            'range_left': data['range.left']/1000,
+            'range_right': data['range.right']/1000
         }
-        get_command(self.sensor_data, 0)
+        if self.print_data % 10 == 0:
+            for name, value in self.sensor_data.items():
+                print(f'{name}: {value:3.3f} ', end='\n')
+        cmd = get_command(self.sensor_data)
+        self.print_data += 1
 
 
     def _on_key_pressed(self, key):
