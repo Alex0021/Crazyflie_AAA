@@ -669,7 +669,19 @@ def update_visualization(sensor_data, map, attractive_force, attractive_magnitud
         idx_obstacles = np.where(map < 0)
 
         canvas[map_size_y-idx_obstacles[0]-1, map_size_x-idx_obstacles[1]-1] = (0, 0, 255)  # Red
-        
+        # Plot Sensor Data
+        text_position = (60, 20)  # Adjust as needed
+        cv2.putText(canvas, f'Range Down: : {sensor_data['range_down']}', text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        # text_position = (text_position[0], text_position[1] + 20)  # Move text position down for next item
+
+        # Plot Sensor Data
+        text_position = (10, 350)  # Adjust as needed
+        cv2.putText(canvas, f'Range Down: {round(sensor_data['range_down'], 3)}', text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Front: {round(sensor_data['range_front'], 3)}', (text_position[0], text_position[1] + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Left: {round(sensor_data['range_left'], 3)}', (text_position[0], text_position[1] + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Right: {round(sensor_data['range_right'], 3)}', (text_position[0], text_position[1] + 75), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        cv2.putText(canvas, f'Range Back: {round(sensor_data['range_back'], 3)}', (text_position[0], text_position[1] + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
         # Plot drone and goal positions
         cv2.circle(canvas, (map_size_x - xdrone, map_size_y - ydrone), 5, (0, 0, 255), -1)  # Red for drone, mirror X coordinate
         cv2.circle(canvas, (map_size_x - xgoal, map_size_y - ygoal), 5, (255, 0, 0), -1)  # Blue for goal, mirror X coordinate
