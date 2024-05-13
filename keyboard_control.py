@@ -119,9 +119,10 @@ class KeyboardController:
             'range_left': data['range.left']/1000,
             'range_right': data['range.right']/1000
         }
-        if self.print_data % 10 == 0:
-            for name, value in self.sensor_data.items():
-                print(f'{name}: {value:3.3f} ', end='\n')
+        print("Range down: ", self.sensor_data['range_down'])
+        # if self.print_data % 1 == 0:
+        #     for name, value in self.sensor_data.items():
+        #         print(f'{name}: {value:3.3f} ', end='\n')
         cmd = get_command(self.sensor_data)
         self._command = [cmd[0],cmd[1],cmd[3],cmd[2]]
         self.print_data += 1
