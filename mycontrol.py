@@ -24,8 +24,9 @@ left_vel_prev = 0
 yaw_desired = 0.3*180/np.pi
 prev_pos = []
 num_loops_stuck = 0
-k_a = 1.0
-k_r = 1.0
+k_a = 1.0 # gain attraction force
+k_r = 1.0 # gain repulsive force
+k_s = 0.1 # gain stucknees force
 permanant_obstacles = 0
 first_landpad_location = None
 second_landpad_location = None
@@ -133,10 +134,12 @@ def get_command(sensor_data):
                 repulsive_force, repulsive_force_wf, repulsive_magnitude = calc_repulsive_force(sensor_data, map)
 
                 # Adjust attractive and repulsive gains based on if the drone is stuck
-                adjust_gains(drone_location, prev_pos)
+                #adjust_gains(drone_location, prev_pos)
+                # Get the avoidance force if drone is stuck
+                stuckness_force = stuckness_avoidance(attractive_force, attractive_force_wf, repulsive_force_wf, attractive_magnitude)
 
                 # Calculate Resultant Force in Body Frame
-                resultant_force = (k_a*attractive_force) + (k_r*repulsive_force)
+                resultant_force = (k_a*attractive_force) + (k_r*repulsive_force) + (k_s*stuckness_force)
 
                 update_visualization(sensor_data, map, attractive_force_wf, attractive_magnitude, repulsive_force_wf, repulsive_magnitude)
 
@@ -577,6 +580,42 @@ def is_stuck(current_pos, prev_pos, threshold=0.2, N=25*UPDATE_FREQUENCY):
             # print('Drone is not stuck anymore!')
         num_loops_stuck = 0
         return False
+    
+def stuckness_avoidance(attractive_force, attractive_force_wf, repulsive_force_wf, attractive_magnitude):
+    """
+    Returns an "avoidance_force" when the angle between the "attraction_force_wf" and "replusion_froce_wf" is more than a certain angle.
+    Input:
+        * attraction_force: 2d-vector from drone to goal given in body-frame
+        * attraction_force_wf: 2d-vector from drone to goal given in world-frame
+        * repulsive_force_wf: 2d-vector from obstacle to drone given in world-frame
+    Output:
+        * avoidance_force: 2d-vector perpendicular to "attraction_force_wf" given in body-frame
+    """
+    
+    def rotate_2d_vector(vector, angle):
+        """
+        Helper function to rotate 2D vector by "angle" amount
+        """
+        return np.dot(np.array([[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]), vector)
+    
+
+    avoidance_force = np.array([0,0])
+    
+    if attractive_magnitude > 0.3: # only do stuckness avoidance if we are more than 0.3m from goal (probably needs tuning)
+        
+        # Calculate angle between repulsion vector and attraction vector
+        w = repulsive_force_wf
+        v = attractive_force_wf
+        angle_attraction_repulsion = np.arctan2(w[1]*v[0] - w[0]*v[1], w[0]*v[0] + w[1]*v[1])
+        #print(angle_attraction_repulsion)
+        
+        if abs(angle_attraction_repulsion) > 150/180 * np.pi: 
+            if angle_attraction_repulsion > 0:
+                avoidance_force = rotate_2d_vector(attractive_force, -np.pi/2) # +
+            else:
+                avoidance_force = rotate_2d_vector(attractive_force, np.pi/2) # -
+
+    return avoidance_force
 
 def compute_repulsive_force(occupancy_map, drone_location):
     repulsive_force = np.zeros(2)  # Initialize repulsive force vector
