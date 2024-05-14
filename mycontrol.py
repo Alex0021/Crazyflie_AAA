@@ -5,7 +5,7 @@ import time
 import cv2
 
 # Global variables
-STARTING_POSE = [0.5,2.0]
+STARTING_POSE = [2.5,2.0]
 GROWING_FACTOR = 13
 UPDATE_FREQUENCY = 2
 on_ground = True
@@ -16,7 +16,7 @@ ctrl_timer = None
 startpos = None
 timer_done = None
 mode = 'takeoff' # 'takeoff', 'find goal', 'land'
-firstpass_goal = np.array([3.5, 1.5]) # Location of the first goal
+firstpass_goal = np.array([4.5, 1.5]) # Location of the first goal
 goal = firstpass_goal
 canvas = None
 fwd_vel_prev = 0
