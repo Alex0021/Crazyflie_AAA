@@ -5,7 +5,8 @@ import time
 import cv2
 
 # Global variables
-STARTING_POSE = [3.0,1.5]
+STARTING_POSE = [0.5,2.0]
+GROWING_FACTOR = 13
 UPDATE_FREQUENCY = 2
 on_ground = True
 DEFAULT_HEIGHT = 0.5
@@ -15,7 +16,7 @@ ctrl_timer = None
 startpos = None
 timer_done = None
 mode = 'takeoff' # 'takeoff', 'find goal', 'land'
-firstpass_goal = np.array([4.5, 1]) # Location of the first goal
+firstpass_goal = np.array([3.5, 1.5]) # Location of the first goal
 goal = firstpass_goal
 canvas = None
 fwd_vel_prev = 0
@@ -664,19 +665,19 @@ def convert_to_body_frame(vector, yaw):
 
 def update_visualization(sensor_data, map, attractive_force, attractive_magnitude, repulsive_force, repulsive_magnitude):
     global canvas, t, k_a, k_r, goal, possible_pad_locations, num_possible_pads_locations, UPDATE_FREQUENCY
-    arrow_size = 10
-    map_size_x = 300
-    map_size_y = 500
+    arrow_size = 15
+    map_size_x = 30*GROWING_FACTOR
+    map_size_y = 50*GROWING_FACTOR
     
     # Calculate Resultant Force in World Frame for Visualization
     resultant_force = (k_a*attractive_force) + (k_r*repulsive_force)
     
     if t % UPDATE_FREQUENCY == 0:
         #print(f'xglobal: {sensor_data["x_global"]}, yglobal: {sensor_data["y_global"]}')
-        xdrone = int(sensor_data['y_global'] * 100)  # Swap X and Y axes
-        ydrone = int(sensor_data['x_global'] * 100)  # Swap X and Y axes
-        xgoal = int(goal[1] * 100)  # Swap X and Y axes
-        ygoal = int(goal[0] * 100)  # Swap X and Y axes
+        xdrone = int(sensor_data['y_global'] * 10*GROWING_FACTOR)  # Swap X and Y axes
+        ydrone = int(sensor_data['x_global'] * 10*GROWING_FACTOR)  # Swap X and Y axes
+        xgoal = int(goal[1] * 10*GROWING_FACTOR)  # Swap X and Y axes
+        ygoal = int(goal[0] * 10*GROWING_FACTOR)  # Swap X and Y axes
         # print(f'xdrone: {xdrone}, ydrone: {ydrone}, xgoal: {xgoal}, ygoal: {ygoal}')
         if canvas is None:
             # Create an empty canvas
@@ -686,7 +687,7 @@ def update_visualization(sensor_data, map, attractive_force, attractive_magnitud
         canvas.fill(255)
         
         # Plot the map with upscaling (Comment out if maps are the same size)
-        map = np.kron(map, np.ones((10, 10)))
+        map = np.kron(map, np.ones((GROWING_FACTOR, GROWING_FACTOR)))
         idx_obstacles = np.where(map < 0)
 
         canvas[map_size_y-idx_obstacles[0]-1, map_size_x-idx_obstacles[1]-1] = (0, 0, 255)  # Red
@@ -714,18 +715,18 @@ def update_visualization(sensor_data, map, attractive_force, attractive_magnitud
         # Plot the attractive force vector
         if attractive_magnitude != 0:
             arrow_end_point = (map_size_x - (xdrone + int(attractive_force[1] * arrow_size)), map_size_y - (ydrone + int(attractive_force[0] * arrow_size)))
-            cv2.arrowedLine(canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (0, 255, 0), thickness=1, tipLength=0.3)
+            cv2.arrowedLine(canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (0, 255, 0), thickness=2, tipLength=0.3)
 
         # Plot the repulsive force vector
         if repulsive_magnitude != 0:
             arrow_end_point = (map_size_x - (xdrone + int(repulsive_force[1] * arrow_size)), map_size_y - (ydrone + int(repulsive_force[0] * arrow_size)))
-            cv2.arrowedLine(canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (255, 0, 0), thickness=1, tipLength=0.3)
+            cv2.arrowedLine(canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (255, 0, 0), thickness=2, tipLength=0.3)
 
         # Plot the resultant force vector
         resultant_magnitude = np.linalg.norm(resultant_force)
         if resultant_magnitude != 0:
             arrow_end_point = (map_size_x - (xdrone + int(resultant_force[1] * arrow_size)), map_size_y - (ydrone + int(resultant_force[0] * arrow_size)))
-            cv2.arrowedLine(canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (0, 0, 0), thickness=1, tipLength=0.3)
+            cv2.arrowedLine(canvas, (map_size_x - xdrone, map_size_y - ydrone), arrow_end_point, (0, 0, 0), thickness=2, tipLength=0.3)
         
         # Show the updated canvas
         cv2.imshow("Map", canvas)
