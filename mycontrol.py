@@ -38,6 +38,7 @@ num_possible_pads_locations = None
 possible_pad_locations = None
 list_of_visited_locations = np.empty((0,2), dtype=object)
 grid_switcher = 0
+grid_index = 0
 prev_range_down = 0
 grade = 0 # Change Grade to change type of control
 """
@@ -61,6 +62,15 @@ Grade + 0.25: Pass through the location of the pink square during flight from th
 # "range_right": Rightward range finder distance
 # "range_back": Backward range finder distance
 # "yaw": Yaw angle (rad)
+
+#============================#
+# GENERATE_GRID_SEARCH_POINTS
+#===========================#
+RES_X = 0.2
+RES_Y = 0.5
+x_coords = np.arange(3.7, 4.7, RES_X)
+y_coords = np.arange(0.2, 2.8, RES_Y)
+GRID_POINTS = np.array(np.meshgrid(x_coords, y_coords)).T.reshape(-1, 2)
 
 # This is the main function where you will implement your control algorithm
 def get_command(sensor_data):
@@ -235,6 +245,7 @@ def assign_goal(sensor_data, map):
     Assigns the goal location based on the current goal. Eg. Cross the map, find landing pad, find pink box, etc.
     '''
     global mode, firstpass_goal, grade, list_of_visited_locations, goal, first_landpad_location, second_landpad_location, prev_height, middle_landpad_location, height_desired
+    global grid_index
     drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
     match mode:
         case 'takeoff':
@@ -261,34 +272,15 @@ def assign_goal(sensor_data, map):
                     first_landpad_location = drone_location
                     print('First Landing Pad Location: ', first_landpad_location)
                     mode = 'land'
-                    return goal
-
-                drone_location = np.round(drone_location * 10)
-                
-                if drone_location.tolist() not in list_of_visited_locations.tolist():
-                    list_of_visited_locations = np.append(list_of_visited_locations, [drone_location], axis=0)
-                   
-                # Build a grid of possible landing pad locations
-                possible_locations = get_possible_pad_locations(drone_location, map)
-                
-                if possible_locations is not None and possible_locations.shape[0] > 0:
-                    
-                    # Make sure drone has reached goal location
-                    if np.array_equal(goal, firstpass_goal):
-                        goal = set_next_goal(possible_locations, drone_location) / 10
-                        return
-
-                    if np.linalg.norm(drone_location*0.1 - goal) < 0.075:
+                else: 
+                    if np.linalg.norm(drone_location - goal) < 0.075:
                         # Assign the next goal location
                         # print('Made it to the Goal Location!')
-                        goal = set_next_goal(possible_locations, drone_location) / 10
-                        # print('Next Goal: ', goal)
-                    return 
-                
-                else:
-                    # print('No Pad Found. Just Fail me already!')
-                    goal = firstpass_goal
+                        grid_index = (grid_index + 1) % len(GRID_POINTS)
+                        print('Next Goal: ', goal)
 
+                    goal = GRID_POINTS[grid_index]
+                    return goal
         
                 
             elif grade == 5.0 or grade == 5.25:
@@ -704,8 +696,8 @@ def update_visualization(sensor_data, map, attractive_force, attractive_magnitud
         cv2.putText(canvas, f'Range Back: {round(sensor_data["range_back"], 3)}', (text_position[0], text_position[1] + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
         # Plot drone and goal positions
-        cv2.circle(canvas, (map_size_x - xdrone, map_size_y - ydrone), 5, (0, 0, 255), -1)  # Red for drone, mirror X coordinate
-        cv2.circle(canvas, (map_size_x - xgoal, map_size_y - ygoal), 5, (255, 0, 0), -1)  # Blue for goal, mirror X coordinate
+        cv2.circle(canvas, (map_size_x - xdrone, map_size_y - ydrone), 8, (0, 0, 255), -1)  # Red for drone, mirror X coordinate
+        cv2.circle(canvas, (map_size_x - xgoal, map_size_y - ygoal), 8, (255, 0, 0), -1)  # Blue for goal, mirror X coordinate
 
         # Plot the possible landing pad locations
         if num_possible_pads_locations is not None and num_possible_pads_locations > 0:
