@@ -3,7 +3,7 @@ import sys
 import time
 from threading import Event
 from pynput import keyboard
-from my_control_andrew import get_command
+from mycontrol import get_command
 import math
 
 import cflib.crtp
