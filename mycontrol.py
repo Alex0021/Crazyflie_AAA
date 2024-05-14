@@ -153,7 +153,7 @@ def get_command(sensor_data):
 
                 # Update the previous position
                 prev_pos.append(drone_location)
-                if len(prev_pos) > 50:
+                if len(prev_pos) > UPDATE_FREQUENCY*50:
                     prev_pos.pop(0)
             else:
                 control_command = [fwd_vel_prev, left_vel_prev, height_desired, yaw_desired]
@@ -245,7 +245,7 @@ def assign_goal(sensor_data, map):
     Assigns the goal location based on the current goal. Eg. Cross the map, find landing pad, find pink box, etc.
     '''
     global mode, firstpass_goal, grade, list_of_visited_locations, goal, first_landpad_location, second_landpad_location, prev_height, middle_landpad_location, height_desired
-    global grid_index
+    global grid_index, height_desired
     drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
     match mode:
         case 'takeoff':
@@ -257,6 +257,7 @@ def assign_goal(sensor_data, map):
                 if drone_location[0] > 3.5:
                     print('Increase Grade to 4.0')
                     grade = 4.0
+                    height_desired = sensor_data['range_down']
                 return firstpass_goal
             
             # Second Goal: Find and Land on the Landing Pad
@@ -540,7 +541,7 @@ def set_next_goal(possible_locations, drone_location):
     
     return goal
 
-def is_stuck(current_pos, prev_pos, threshold=0.2, N=50):
+def is_stuck(current_pos, prev_pos, threshold=0.2, N=25*UPDATE_FREQUENCY):
     """
     Check if the drone is stuck in one position. If more than N loops, then the drone is stuck.
     params:
@@ -562,16 +563,16 @@ def is_stuck(current_pos, prev_pos, threshold=0.2, N=50):
         first_landpad_location = None
         second_landpad_location = None 
         middle_landpad_location = None
-        if num_loops_stuck > 150 and num_loops_stuck < 200:
+        if num_loops_stuck > 75*UPDATE_FREQUENCY and num_loops_stuck < 100*UPDATE_FREQUENCY:
             # print('Drone is stuck in one position for {} loops. Drone is Stuck! Change Goal Location.'.format(num_loops_stuck))
             goal = np.array([4.0, 0.3 ]) # Change the goal location
-        elif num_loops_stuck >= 150:
+        elif num_loops_stuck >= 75*UPDATE_FREQUENCY:
             # print('Drone is stuck in one position for {} loops. Drone is Stuck! Change Goal Location.'.format(num_loops_stuck))
             goal = np.array([4.0, 2.7]) # Change the goal location back to the original
         return True
     else:
         if num_loops_stuck > 0:
-            if num_loops_stuck > 200:
+            if num_loops_stuck > 100*UPDATE_FREQUENCY:
                 goal = firstpass_goal # Change the goal location back to the original
             # print('Drone is not stuck anymore!')
         num_loops_stuck = 0
