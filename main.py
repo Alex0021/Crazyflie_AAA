@@ -17,7 +17,7 @@ from cflib.crazyflie.log import LogConfig
 URI = uri_helper.uri_from_env(default="radio://0/40/2M/E7E7E7E704")
 
 BASE_VEL = 0.3
-DESIRED_HEIGHT = 0.4
+DESIRED_HEIGHT = 0.5
 BASE_ANG_RATE = 30
 EMERGENCY_LANDING_UP_RANGE = 0.1
 
@@ -118,7 +118,8 @@ class KeyboardController:
             'range_left': data['range.left']/1000,
             'range_right': data['range.right']/1000
         }
-        print("Range down: ", self.sensor_data['range_down'])
+        #print(f"Z Global: {self.sensor_data['z_global']:.3f}")
+        #print("Range down: ", self.sensor_data['range_down'])
         # if self.print_data % 1 == 0:
         #     for name, value in self.sensor_data.items():
         #         print(f'{name}: {value:3.3f} ', end='\n')
@@ -168,7 +169,7 @@ class KeyboardController:
 if __name__ == "__main__":
     # Load crazyflie driver
     cflib.crtp.init_drivers(enable_debug_driver=False)
-
+ 
     # Create a KeyboardController object
     controller = KeyboardController()
 

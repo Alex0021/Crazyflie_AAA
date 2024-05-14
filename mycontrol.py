@@ -5,11 +5,12 @@ import time
 import cv2
 
 # Global variables
-STARTING_POSE = [2.5,2.0]
+STARTING_POSE = [3.0,1.5]
 GROWING_FACTOR = 13
 UPDATE_FREQUENCY = 2
+PREV_HEIGHT_UPDATE = 2
 on_ground = True
-DEFAULT_HEIGHT = 0.5
+DEFAULT_HEIGHT = 0.35
 height_desired = DEFAULT_HEIGHT
 timer = None
 ctrl_timer = None
@@ -23,6 +24,7 @@ fwd_vel_prev = 0
 left_vel_prev = 0
 yaw_desired = 0.3*180/np.pi
 prev_pos = []
+next_edge_goal = None
 num_loops_stuck = 0
 k_a = 1.0 # gain attraction force
 k_r = 1.0 # gain repulsive force
@@ -31,6 +33,8 @@ permanant_obstacles = 0
 first_landpad_location = None
 second_landpad_location = None
 middle_landpad_location = None
+stabilizing = False
+stabilize_counter = 0
 landpad_timer = 0
 is_landed = False
 is_landed_finale = False
@@ -95,9 +99,6 @@ def get_command(sensor_data):
     # adjust the relative position
     sensor_data['x_global'] += startpos[0]
     sensor_data['y_global'] += startpos[1]
-
-    if t % 5 == 0:
-        prev_range_down = sensor_data['range_down']
 
     # ---- YOUR CODE HERE ----
     # Set Control Command
@@ -175,6 +176,7 @@ def get_command(sensor_data):
                     attractive_force, attractive_force_wf, attractive_magnitude = calc_attractive_force(sensor_data)
                     control_command = [attractive_force[0] / 50, attractive_force[1] / 50, height_desired, 0.0]
                     landpad_timer += 1
+                    #control_command = [0.0, 0.0, height_desired, 0.0]
                     # print('Landpad Timer: ', landpad_timer)
                 elif landpad_timer >= 4 * 200:
                     # print('No Second Landing Pad Found. Just Fail me already!')
@@ -206,6 +208,9 @@ def get_command(sensor_data):
                         control_command = [0.0, 0.0, height_desired, 0.0]
 
     map = occupancy_map(sensor_data)
+
+    if t % PREV_HEIGHT_UPDATE == 0:
+        prev_range_down = sensor_data['range_down']
     t += 1
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
 
@@ -248,7 +253,7 @@ def assign_goal(sensor_data, map):
     Assigns the goal location based on the current goal. Eg. Cross the map, find landing pad, find pink box, etc.
     '''
     global mode, firstpass_goal, grade, list_of_visited_locations, goal, first_landpad_location, second_landpad_location, prev_height, middle_landpad_location, height_desired
-    global grid_index, height_desired
+    global grid_index, height_desired, stabilizing, stabilize_counter, next_edge_goal
     drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
     match mode:
         case 'takeoff':
@@ -269,21 +274,35 @@ def assign_goal(sensor_data, map):
                 # Update Visited Locations making sure not to add the same location twice
                 # print('Range Down: ', sensor_data['range_down'])
                 landing = is_above_landpad(sensor_data)
+                if landing and stabilizing:
+                    if stabilize_counter < 10*UPDATE_FREQUENCY:
+                        stabilize_counter += 1
+                        return goal
+                    else:
+                        stabilizing = False
+                        goal = next_edge_goal
                 if landing:
                     print('First Landing Pad Location Found!')
-                    height_desired = sensor_data['range_down']
+                    #height_desired = sensor_data['range_down']
                     prev_height = sensor_data['range_down']
                     first_landpad_location = drone_location
+                    next_edge_goal = goal
+                    stabilize_counter = 0
+                    stabilizing = True
                     print('First Landing Pad Location: ', first_landpad_location)
                     mode = 'land'
+                    goal = first_landpad_location + np.array([0.0, 0.01])
                 else: 
-                    if np.linalg.norm(drone_location - goal) < 0.075:
-                        # Assign the next goal location
-                        # print('Made it to the Goal Location!')
-                        grid_index = (grid_index + 1) % len(GRID_POINTS)
-                        print('Next Goal: ', goal)
+                    # if np.linalg.norm(drone_location - goal) < 0.075:
+                    #     # Assign the next goal location
+                    #     # print('Made it to the Goal Location!')
+                    #     grid_index = (grid_index + 1) % len(GRID_POINTS)
+                    #     print('Next Goal: ', goal)
+                    # elif waypoint_obstructed(goal, map, margin=0.2):
+                    #     grid_index = (grid_index + 1) % len(GRID_POINTS)
+                    #     print('OBSTRUCTED GOAL, going to next: ', goal)
 
-                    goal = GRID_POINTS[grid_index]
+                    # goal = GRID_POINTS[grid_index]
                     return goal
         
                 
@@ -339,10 +358,20 @@ def is_above_landpad(sensor_data):
     '''
     This function checks if the drone is above the landing pad.
     '''
-    if abs(sensor_data['range_down'] - prev_range_down) > 0.05:
+    #print(abs(sensor_data['range_down'] - prev_range_down))
+    if abs(sensor_data['range_down'] - prev_range_down) > 0.04:
         return True
     else:
         return False
+
+def waypoint_obstructed(goal, map, margin=0.3):
+    map = map.copy() < -0.2
+    for (x,y), value in np.ndenumerate(map):
+        if value:
+            pos_obstacle = np.array([x, y]) * 0.1
+            if np.linalg.norm(pos_obstacle - goal) < margin:
+                return True
+    return False
 
 def get_possible_pad_locations(drone_location, map):
     '''
