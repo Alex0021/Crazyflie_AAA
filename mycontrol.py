@@ -235,6 +235,7 @@ def assign_goal(sensor_data, map):
     Assigns the goal location based on the current goal. Eg. Cross the map, find landing pad, find pink box, etc.
     '''
     global mode, firstpass_goal, grade, list_of_visited_locations, goal, first_landpad_location, second_landpad_location, prev_height, middle_landpad_location, height_desired
+    global height_desired
     drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
     match mode:
         case 'takeoff':
@@ -246,6 +247,7 @@ def assign_goal(sensor_data, map):
                 if drone_location[0] > 3.5:
                     print('Increase Grade to 4.0')
                     grade = 4.0
+                    height_desired = sensor_data['range_down']
                 return firstpass_goal
             
             # Second Goal: Find and Land on the Landing Pad
