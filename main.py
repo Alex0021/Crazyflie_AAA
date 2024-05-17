@@ -5,6 +5,7 @@ from threading import Event
 from pynput import keyboard
 from mycontrol import get_command
 import math
+import matplotlib.pyplot as plt
 
 import cflib.crtp
 from cflib.crazyflie import Crazyflie
@@ -186,6 +187,8 @@ if __name__ == "__main__":
     time.sleep(0.5)
     print("INITIALIZING KALMAN ESTIMATOR: DONE")
     controller.is_ready = True
+
+    plt.show(block=False)
 
     while controller.is_connected:
         #print("IN AIR" if controller.in_air else "ON GROUND", end="\r")
