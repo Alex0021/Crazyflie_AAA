@@ -90,7 +90,7 @@ x_coords = np.outer(x_coords, np.ones_like(y_coords))
 y_coords = np.concatenate([[y_coords if i % 2 == 0 else y_coords[::-1]] for i in range(len(x_coords))])
 GRID_POINTS = np.array([x_coords.flatten(), y_coords.flatten()]).T
 
-NB_POINTS_HIST = 500
+NB_POINTS_HIST = 1000
 fig_pose = plt.figure(1, figsize=(8, 6))
 axs = fig_pose.subplots(3,1, sharex=True)
 artists = {"line_height": axs[0].plot([], [], "r-", lw=2)[0],
@@ -144,8 +144,8 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
     else:
         on_ground = False
 
-    if anim is None:
-        anim = FuncAnimation(fig_pose, init_func=init_plots, frames=frame_iter, func=render, interval=5, cache_frame_data=True, blit=True)
+    #if anim is None:
+        #anim = FuncAnimation(fig_pose, init_func=init_plots, frames=frame_iter, func=render, interval=5, cache_frame_data=True, blit=True)
         #plt.show(block=False)
 
     # adjust the relative position
