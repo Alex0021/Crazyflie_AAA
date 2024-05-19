@@ -13,7 +13,7 @@ if IN_SIM:
     UPDATE_FREQUENCY = 10
     yaw_desired = 0.3
 else:
-    STARTING_POSE = [3.2,1.5]
+    STARTING_POSE = [3.0,1.0]
     UPDATE_FREQUENCY = 2
     yaw_desired = 0.3 * 180 / np.pi   
 
@@ -37,7 +37,7 @@ prev_dpos = []
 prev_ddpos = []
 next_edge_goal = None
 num_loops_stuck = 0
-k_a = 1.0 # gain attraction force
+k_a = 1.2 # gain attraction force
 k_r = 1.0 # gain repulsive force
 k_s = 0.1 # gain stucknees force
 permanant_obstacles = 0
@@ -57,6 +57,7 @@ grid_switcher = 0
 grid_index = 0
 prev_range_down = 0
 grade = 0 # Change Grade to change type of control
+waiting_takeoff = False
 """
 Grade 4.0: Take off, avoid obstacles and reach the landing region whilst being airborne
 Grade 4.5: Land on the landing pad
@@ -83,14 +84,14 @@ Grade + 0.25: Pass through the location of the pink square during flight from th
 # GENERATE_GRID_SEARCH_POINTS
 #===========================#
 RES_X = 0.2
-RES_Y = 0.5
+RES_Y = 0.4
 x_coords = np.arange(3.7, 4.7+RES_X, RES_X)
-y_coords = np.arange(0.2, 2.8, RES_Y)
+y_coords = np.arange(0.3, 2.75, RES_Y)
 x_coords = np.outer(x_coords, np.ones_like(y_coords))
 y_coords = np.concatenate([[y_coords if i % 2 == 0 else y_coords[::-1]] for i in range(len(x_coords))])
 GRID_POINTS = np.array([x_coords.flatten(), y_coords.flatten()]).T
-
-NB_POINTS_HIST = 1000
+prev_pos
+NB_POINTS_HIST = 200
 fig_pose = plt.figure(1, figsize=(8, 6))
 axs = fig_pose.subplots(3,1, sharex=True)
 artists = {"line_height": axs[0].plot([], [], "r-", lw=2)[0],
@@ -126,7 +127,7 @@ def render(data):
 # This is the main function where you will implement your control algorithm
 def get_command(sensor_data, camera_data=None, dt=0.1):
     global on_ground, startpos, mode, ctrl_timer, t, fwd_vel_prev, left_vel_prev, yaw_desired, height_desired, prev_range_down
-    global prev_pos, num_loops_stuck, firstpass_goal, k_a, k_r, possible_pad_locations, num_possible_pads_locations, anim
+    global prev_pos, num_loops_stuck, firstpass_goal, k_a, k_r, possible_pad_locations, num_possible_pads_locations, anim, waiting_takeoff
     global list_of_visited_locations, grade, goal, is_landed, landpad_timer, first_landpad_location, second_landpad_location, middle_landpad_location
     # Open a window to display the camera image
     # NOTE: Displaying the camera image will slow down the simulation, this is just for testing
@@ -207,15 +208,16 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                     update_visualization(sensor_data, map, attractive_force_wf, attractive_magnitude, repulsive_force_wf, repulsive_magnitude)
 
                     # Set the forward and left velocities
-                    fwd_vel = resultant_force[0] / attractive_magnitude / 5
-                    left_vel = resultant_force[1] / attractive_magnitude / 5
+                    fwd_vel = resultant_force[0] / 20
+                    left_vel = resultant_force[1] / 20
+                    print(f"fwd: {fwd_vel:.3f}, left: {left_vel:.3f}")
 
                     # Set control command to move towards the goal while avoiding obstacles
                     control_command = [fwd_vel, left_vel, height_desired, yaw_desired]
                     
                     # Set previous velocities
                     fwd_vel_prev = fwd_vel
-                    left_vel_prev = left_vel
+                    leftprev_pos_vel_prev = left_vel
 
             else:
                 control_command = [fwd_vel_prev, left_vel_prev, height_desired, yaw_desired]
@@ -230,12 +232,12 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                     # Ignore repulsive forces and move towards goal
                     # print('First Landing Pad Location Found! Continue Moving Towards Goal')
                     attractive_force, attractive_force_wf, attractive_magnitude = calc_attractive_force(sensor_data)
-                    control_command = [attractive_force[0] / 50, attractive_force[1] / 50, height_desired, 0.0]
+                    control_command = [attractive_force[0] / 20, attractive_force[1] / 20, height_desired, 0.0]
                     landpad_timer += 1
                     #control_command = [0.0, 0.0, height_desired, 0.0]
-                    # print('Landpad Timer: ', landpad_timer)
+                    #print('Landpad Timer: ', landpad_timer)
                 elif landpad_timer >= 4 * 200:
-                    # print('No Second Landing Pad Found. Just Fail me already!')
+                    print('No Second Landing Pad Found. Just Fail me already!')
                     mode = 'find goal'
                     first_landpad_location = None
                     second_landpad_location = None 
@@ -243,25 +245,37 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                     landpad_timer = 0
                     control_command = [0.0, 0.0, height_desired, 0.0]
 
-                elif second_landpad_location is not None and np.linalg.norm(drone_location[:2] - goal) > 0.1: # If we have two landing pad locations, move towards the midpoint between the two
+                elif second_landpad_location is not None and not goal_reached(drone_location[:2], goal, tol=0.02): # If we have two landing pad locations, move towards the midpoint between the two
                     #print('Second Landing Pad Location Found! Move Towards the Midpoint Between the Two Landing Pads')
                     attractive_force, attractive_force_wf, attractive_magnitude = calc_attractive_force(sensor_data)
                     control_command = [attractive_force[0] / 50, attractive_force[1] / 50, height_desired, 0.0]
                 else:
                     if not is_landed:
                         # print('Landing on the Landing Pad')
-                        control_command = [0.0, 0.0, 0.01, 0.0]
+                        control_command = [0.0, 0.0, 0.05, 0.0]
                         if sensor_data['range_down'] < 0.1:
-                            control_command = [0.0, 0.0, height_desired, 0.0]
+                            control_command = [0.0, 0.0, -1, 0.0]
                             is_landed = True
-                            mode = 'find goal'
+                            waiting_takeoff = True
+                            landpad_timer = 0
+                            #mode = 'find goal'
                             goal = firstpass_goal
                             grade = 5.0
-                            # print('Landed on the Landing Pad. \n Grade Increased to 5.0 \n')
+                            print('Landed on the Landing Pad. \n Grade Increased to 5.0 \n')
                     else:
-                        mode = 'find goal'
-                        # landpad_timer = 0
-                        control_command = [0.0, 0.0, height_desired, 0.0]
+                        if waiting_takeoff:
+                            if landpad_timer < 20:
+                                control_command = [0.0, 0.0, -1, 0.0]
+                                landpad_timer += 1
+                            else:
+                                print("Ready to take off!")
+                                waiting_takeoff = False
+                                control_command = [0.0, 0.0, height_desired, 0.0]
+                                mode = 'find goal'
+                        else:
+                            mode = 'find goal' 
+                            # landpad_timer = 0
+                            control_command = [0.0, 0.0, height_desired, 0.0]
 
     map = occupancy_map(sensor_data)
 
@@ -273,24 +287,24 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
     # Second order derivative
     if len(prev_dpos) > 1:
         prev_ddpos.append((prev_dpos[-1] - prev_dpos[-2]))
-    
-    if len(prev_pos) > NB_POINTS_HIST:
-        prev_pos.pop(0)
-    if len(prev_dpos) > NB_POINTS_HIST:
-        prev_dpos.pop(0)
-    if len(prev_ddpos) > NB_POINTS_HIST:
-        prev_ddpos.pop(0)
 
     if t % PREV_HEIGHT_UPDATE == 0:
         prev_range_down = sensor_data['range_down']
+        if len(prev_pos) > NB_POINTS_HIST:
+            np.save('pos_hist', {'height': prev_pos, 'dheight': prev_dpos, 'ddheight': prev_ddpos})
+            prev_pos.pop(0)
+        if len(prev_dpos) > NB_POINTS_HIST:
+            prev_dpos.pop(0)
+        if len(prev_ddpos) > NB_POINTS_HIST:
+            prev_ddpos.pop(0)
     t += 1
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
 
-def goal_reached(drone_location, goal):
+def goal_reached(drone_location, goal, tol=0.075):
     """
     Check if the drone has reached the goal location
     """
-    if np.linalg.norm(drone_location - goal) < 0.075:
+    if np.linalg.norm(drone_location - goal) < tol:
         return True
     else:
         return False
@@ -347,7 +361,7 @@ def assign_goal(sensor_data, map):
                 if drone_location[0] > 3.5:
                     print('Increase Grade to 4.0')
                     grade = 4.0
-                    height_desired = sensor_data['range_down']
+                    #height_desired = sensor_data['range_down']
                     if drone_location[1] > 1.5:
                         # Regenerate the grid search points
                         y_coords = np.arange(0.2, 2.8, RES_Y)
@@ -371,15 +385,20 @@ def assign_goal(sensor_data, map):
                         stabilizing = False
                         goal = next_edge_goal
                 if landing:
+                    height_desired = sensor_data['range_down']
                     print('First Landing Pad Location Found!')
                     #height_desired = sensor_data['range_down']
                     prev_height = sensor_data['range_down']
                     first_landpad_location = drone_location
-                    next_edge_goal = goal
-                    stabilize_counter = 0
                     #stabilizing = True
                     print('First Landing Pad Location: ', first_landpad_location)
                     mode = 'land'
+                    if goal_reached(drone_location[:2], goal, tol=0.3):
+                        grid_index = (grid_index + 1) % len(GRID_POINTS)
+                        print('Goal to close to landing zone! Next: ', goal)
+                        goal = GRID_POINTS[grid_index]
+                    next_edge_goal = goal
+                    stabilize_counter = 0
                     #goal = first_landpad_location + np.array([0.0, 0.01])
                 else: 
                     if goal_reached(drone_location[:2], goal):
@@ -419,7 +438,7 @@ def assign_goal(sensor_data, map):
             
             
             if is_above_landpad(sensor_data) and second_landpad_location is None:
-                height_desired = sensor_data['range_down']
+                #height_desired = sensor_data['range_down']
                 print('Second Landing Pad Location Found!')
                 second_landpad_location = drone_location
                 print('Second Landing Pad Location: ', second_landpad_location)
@@ -445,6 +464,7 @@ def assign_goal(sensor_data, map):
                 if goal_reached(drone_location[:2], goal):
                     # Set the goal to the first landing pad location
                     grid_index = (grid_index + 1) % len(GRID_POINTS)
+                    goal = GRID_POINTS[grid_index]
                     print('Next Goal: ', goal)
                 return goal
             
@@ -454,7 +474,8 @@ def is_above_landpad(sensor_data):
     This function checks if the drone is above the landing pad.
     '''
     #print(abs(sensor_data['range_down'] - prev_range_down))
-    if abs(sensor_data['range_down'] - prev_range_down) > 0.04:
+    #print(abs(sensor_data['range_down'] - prev_range_down))
+    if abs(sensor_data['range_down'] - prev_range_down) > 0.03:
         return True
     else:
         return False
@@ -467,207 +488,6 @@ def waypoint_obstructed(goal, map, margin=0.3):
             if np.linalg.norm(pos_obstacle - goal) < margin:
                 return True
     return False
-
-def get_possible_pad_locations(drone_location, map):
-    '''
-    This function finds possible landing pad locations based on the current and 
-     previous drone locations and the obstacle locations. It returns a list of
-     the possible landing pad locations for the drone to loop through.
-    '''
-    global num_possible_pads_locations, possible_pad_locations, t, list_of_visited_locations, UPDATE_FREQUENCY
-    if num_possible_pads_locations is None or t % UPDATE_FREQUENCY == 0:
-        # Get all the free or unknown locations in landing zone.
-        possible_pad_indices = np.column_stack(np.where(map > 0))
-        # print('#########################################################')
-        # print('Number of Possible Pad Locations Before: ', possible_pad_indices.shape[0])
-        
-        # Filter out locations outside the landing zone
-        possible_pad_indices = possible_pad_indices[possible_pad_indices[:, 0] > 35]
-        # print('Number of Possible Pad Locations After Y Filter: ', possible_pad_indices.shape[0])
-
-        # Filter out all locations with even numbered x and y coordinates
-        possible_pad_indices = even_number_filter(possible_pad_indices)
-        # print('Number of Possible Pad Locations After Even Number Filter: ', possible_pad_indices.shape[0])
-
-        # Filter out locations that are next to an obstacle
-        possible_pad_indices = adjacent_obstacle_filter(possible_pad_indices, map)
-        # print('Number of Possible Pad Locations After Adjacent Filter: ', possible_pad_indices.shape[0])
-        
-
-        # Filter out locations that have already been visited
-        possible_pad_indices = visited_location_filter(possible_pad_indices, list_of_visited_locations)
-        # print('Number of Possible Pad Locations After Visited Filter: ', possible_pad_indices.shape[0])
-        
-        # Update Global Variables
-        num_possible_pads_locations = possible_pad_indices.shape[0]
-        possible_pad_locations = possible_pad_indices
-
-        return possible_pad_locations
-    
-    elif num_possible_pads_locations == 0:
-        # print('No Pad Found. Just Fail me already!')
-        return None
-    
-    else:
-        return possible_pad_locations
-
-
-def even_number_filter(possible_pad_indices):
-    '''
-    This function filters out possible landing pad locations that have even numbered x and y coordinates.
-    '''
-    possible_pad_indices = possible_pad_indices[(possible_pad_indices[:, 0] % 2 != 0) & (possible_pad_indices[:, 1] % 2 != 0)]
-
-    return possible_pad_indices
-
-def adjacent_obstacle_filter(possible_pad_indices, occupancy_map):
-    '''
-    This function filters out possible landing pad locations that are adjacent to obstacles.
-    '''
-    num_adjacent_neighbors = 1
-
-    # Find the indices of all the obstacles on the map
-    obstacle_indices = np.column_stack(np.where(occupancy_map < 0))
-
-    # Filter out obstacles with an x coordinate less than 35
-    obstacle_indices = obstacle_indices[obstacle_indices[:, 0] > 35]
-
-    for N in range(num_adjacent_neighbors):
-
-        # Create an array of the offsets
-        offsets = np.array([[i, j] for i in range(-1, 2) for j in range(-1, 2)])
-
-        # Add the offsets to the obstacle indices
-        adjacent_obstacle_indices = obstacle_indices[:, None] + offsets
-
-        # Reshape and convert to a list of indices
-        adjacent_obstacle_indices = adjacent_obstacle_indices.reshape(-1, 2).tolist()
-
-        # Append the adjacent obstacle indices to the list of obstacle indices
-        obstacle_indices = np.append(obstacle_indices, adjacent_obstacle_indices, axis=0)
-
-        # Remove adjacent obstacle indices from the list of possible pad indices
-        # Convert 2D arrays to structured arrays
-        structured_obstacle_indices = np.core.records.fromarrays(obstacle_indices.transpose(), 
-                                                                names='f0, f1', 
-                                                                formats = 'i8, i8')
-
-        structured_possible_pad_indices = np.core.records.fromarrays(possible_pad_indices.transpose(), 
-                                                                    names='f0, f1', 
-                                                                    formats = 'i8, i8')
-
-        # Use numpy setdiff1d to find rows in possible_pad_indices that are not in obstacle_indices
-        possible_pad_indices = np.setdiff1d(structured_possible_pad_indices, structured_obstacle_indices).view(np.int64).reshape(-1, 2)
-        #possible_pad_indices = possible_pad_indices.view(np.int64).reshape(-1, 2)
-
-    return possible_pad_indices
-
-def visited_location_filter(possible_pad_indices, list_of_visited_locations):
-    '''
-    This function filters out possible landing pad locations that have already been visited.
-    '''
-    # If the list of visited locations is empty, return the possible pad indices
-    if list_of_visited_locations.size == 0:
-        return possible_pad_indices
-
-    # Convert Visited Locations Array from Tuples to Numpy Array
-    # list_of_visited_locations = np.array(list(list_of_visited_locations.tolist()))
-    # Convert array of tuples to numpy array
-    visited_locations = np.vstack(list_of_visited_locations).astype(int)
-    possible_pad_indices = np.column_stack(possible_pad_indices.T)
-   
-    structured_visited_indices = np.core.records.fromarrays(visited_locations.transpose(), 
-                                                                names='f0, f1', 
-                                                                formats = 'i8, i8')
-
-    structured_possible_pad_indices = np.core.records.fromarrays(possible_pad_indices.transpose(), 
-                                                                names='f0, f1', 
-                                                                formats = 'i8, i8')
-    
-    # Use numpy setdiff1d to find rows in possible_pad_indices that are not in the visited list
-    possible_pad_indices = np.setdiff1d(structured_possible_pad_indices, structured_visited_indices).view(np.int64).reshape(-1, 2)
-
-    return possible_pad_indices
-
-def set_next_goal(possible_locations, drone_location):
-    '''
-    This function sets the next goal location for the drone to move to.
-    '''
-    global grid_switcher
-    
-    # Separate the x and y coordinates
-    x_coords, y_coords = possible_locations[:, 0], possible_locations[:, 1]
-
-    # Get the Extremes of the Possible Locations
-    min_x, max_x = np.min(x_coords), np.max(x_coords)
-    min_y, max_y = np.min(y_coords), np.max(y_coords)
-
-
-    match grid_switcher:
-
-        case 0:
-            # Give the Indice with the largest sum of its X and Y coordinates
-            max_x_max_y = np.argmax(np.sum(possible_locations, axis=1))
-            goal = possible_locations[max_x_max_y]
-            # print('Grid Switcher: ', grid_switcher)
-            grid_switcher = 1
-            
-            # print('Max X Max Y: ', max_x_max_y)
-
-        case 1:
-            # Give the Indice with the smallest sum of its X and Y coordinates
-            # print('Grid Switcher: ', grid_switcher)
-            min_x_min_y = np.argmin(np.sum(possible_locations, axis=1))
-            goal = possible_locations[min_x_min_y]
-            
-            grid_switcher = 2
-            
-            # print('Min X Min Y: ', min_x_min_y)
-
-        case 2:
-            # Find the indices of the possible locations with the maximum x coordinate
-            # print('Grid Switcher: ', grid_switcher)
-            max_x_indices = np.where(possible_locations[:, 0] == max_x)
-            # print('Max X Indices: ', max_x_indices)
-
-            # Get the possible locations with the maximum x coordinate
-            max_x_min_y = possible_locations[max_x_indices]
-            # print('Max X Min Y: ', max_x_min_y)
-
-            # Get the index of the location with the minimum y coordinate
-            max_x_min_y_index = np.argmin(max_x_min_y[:, 1])
-            # print('Max X Min Y Index: ', max_x_min_y_index)
-
-            # Assign the goal location
-            goal = max_x_min_y[max_x_min_y_index]
-            
-            grid_switcher = 3
-            
-            # print('Goal: ', goal)
-
-        case 3:            
-            # Find the indices of the possible locations with the minimum x coordinate
-            # print('Grid Switcher: ', grid_switcher)
-            min_x_indices = np.where(possible_locations[:, 0] == min_x)
-            # print('Min X Indices: ', min_x_indices)
-
-            # Get the possible locations with the minimum x coordinate
-            min_x_max_y = possible_locations[min_x_indices]
-            # print('Min X Max Y: ', min_x_max_y)
-
-            # Get the index of the location with the maximum y coordinate
-            min_x_max_y_index = np.argmax(min_x_max_y[:, 1])
-            # print('Min X Max Y: ', min_x_max_y_index)
-
-            # Assign the goal location
-            goal = min_x_max_y[min_x_max_y_index]
-          
-            
-            grid_switcher = 0
-            
-            # print('Goal: ', goal)
-    
-    return goal
 
 def is_stuck(current_pos, prev_pos, threshold=0.2, N=25*UPDATE_FREQUENCY):
     """

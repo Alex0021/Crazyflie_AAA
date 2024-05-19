@@ -125,7 +125,12 @@ class KeyboardController:
         #     for name, value in self.sensor_data.items():
         #         print(f'{name}: {value:3.3f} ', end='\n')
         cmd = get_command(self.sensor_data)
-        self._command = [cmd[0],cmd[1],cmd[3],cmd[2]]
+        if cmd[2] == -1:
+            self.is_ready = False
+            self._cf.commander.send_stop_setpoint()
+        else:
+            self.is_ready = True
+            self._command = [cmd[0],cmd[1],cmd[3],cmd[2]]
         self.print_data += 1
 
 
