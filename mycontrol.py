@@ -6,6 +6,7 @@ import cv2
 from matplotlib.animation import FuncAnimation
 
 IN_SIM = False
+OUTPUT_CMD = True
 
 # Global variables
 if IN_SIM:
@@ -13,19 +14,21 @@ if IN_SIM:
     UPDATE_FREQUENCY = 10
     yaw_desired = 0.3
 else:
-    STARTING_POSE = [3.0,1.0]
+    STARTING_POSE = [2.0,1.0]
     UPDATE_FREQUENCY = 2
     yaw_desired = 0.3 * 180 / np.pi   
 
-GROWING_FACTOR = 13
-PREV_HEIGHT_UPDATE = 2
+GROWING_FACTOR = 8
+PREV_HEIGHT_UPDATE = 4
+LANDING_PAD_THRESHOLD = 0.035
 on_ground = True
-DEFAULT_HEIGHT = 0.35
+DEFAULT_HEIGHT = 0.3
 height_desired = DEFAULT_HEIGHT
 timer = None
 ctrl_timer = None
 startpos = None
 timer_done = None
+going_down = False
 mode = 'takeoff' # 'takeoff', 'find goal', 'land'
 firstpass_goal = np.array([4.5, 1.0]) # Location of the first goal
 goal = firstpass_goal
@@ -37,8 +40,9 @@ prev_dpos = []
 prev_ddpos = []
 next_edge_goal = None
 num_loops_stuck = 0
-k_a = 1.2 # gain attraction force
-k_r = 1.0 # gain repulsive force
+prev_command = np.zeros(4)
+k_a = 1.0 # gain attraction force
+k_r = 0.85 # gain repulsive force
 k_s = 0.1 # gain stucknees force
 permanant_obstacles = 0
 first_landpad_location = None
@@ -128,7 +132,8 @@ def render(data):
 def get_command(sensor_data, camera_data=None, dt=0.1):
     global on_ground, startpos, mode, ctrl_timer, t, fwd_vel_prev, left_vel_prev, yaw_desired, height_desired, prev_range_down
     global prev_pos, num_loops_stuck, firstpass_goal, k_a, k_r, possible_pad_locations, num_possible_pads_locations, anim, waiting_takeoff
-    global list_of_visited_locations, grade, goal, is_landed, landpad_timer, first_landpad_location, second_landpad_location, middle_landpad_location
+    global list_of_visited_locations, grade, goal, is_landed, landpad_timer, first_landpad_location, second_landpad_location, middle_landpad_location, prev_command
+    global going_down
     # Open a window to display the camera image
     # NOTE: Displaying the camera image will slow down the simulation, this is just for testing
     # cv2.imshow('Camera Feed', camera_data)
@@ -172,7 +177,7 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
             if ctrl_timer is None:
                 ctrl_timer = time.time()
 
-            if time.time() - ctrl_timer < 3:
+            if time.time() - ctrl_timer < 1:
                 control_command = [0.0, 0.0, height_desired, 0.0]
                 return control_command
             else:
@@ -183,49 +188,52 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
             if t % UPDATE_FREQUENCY == 0:
 
                 # Check if goal is reached
-                if goal_reached(drone_location[:2], goal):
-                    # Set previous velocities
-                    fwd_vel_prev = 0
-                    left_vel_prev = 0
-                    yaw_desired = 0.0
-                    control_command = [0.0, 0.0, height_desired, 0.0]
+                # if goal_reached(drone_location[:2], goal):
+                #     # Set previous velocities
+                #     fwd_vel_prev = 0
+                #     left_vel_prev = 0
+                #     yaw_desired = 0.0
+                #     control_command = [0.0, 0.0, height_desired, 0.0]
 
-                else:
-                    # Get the vector from the drone to the goal
-                    attractive_force, attractive_force_wf, attractive_magnitude = calc_attractive_force(sensor_data) 
+                # else:
+                # Get the vector from the drone to the goal
+                attractive_force, attractive_force_wf, attractive_magnitude = calc_attractive_force(sensor_data) 
 
-                    # Get the repulsive force from nearby obstacles
-                    repulsive_force, repulsive_force_wf, repulsive_magnitude = calc_repulsive_force(sensor_data, map)
+                # Get the repulsive force from nearby obstacles
+                repulsive_force, repulsive_force_wf, repulsive_magnitude = calc_repulsive_force(sensor_data, map)
 
-                    # Adjust attractive and repulsive gains based on if the drone is stuck
-                    #adjust_gains(drone_location, prev_pos)
-                    # Get the avoidance force if drone is stuck
-                    stuckness_force = stuckness_avoidance(attractive_force, attractive_force_wf, repulsive_force_wf, attractive_magnitude)
+                # Adjust attractive and repulsive gains based on if the drone is stuck
+                #adjust_gains(drone_location, prev_pos)
+                # Get the avoidance force if drone is stuck
+                stuckness_force = stuckness_avoidance(attractive_force, attractive_force_wf, repulsive_force_wf, attractive_magnitude)
 
-                    # Calculate Resultant Force in Body Frame
-                    resultant_force = (k_a*attractive_force) + (k_r*repulsive_force) + (k_s*stuckness_force)
+                # Calculate Resultant Force in Body Frame
+                resultant_force = (k_a*attractive_force) + (k_r*repulsive_force) + (k_s*stuckness_force)
 
-                    update_visualization(sensor_data, map, attractive_force_wf, attractive_magnitude, repulsive_force_wf, repulsive_magnitude)
+                update_visualization(sensor_data, map, attractive_force_wf, attractive_magnitude, repulsive_force_wf, repulsive_magnitude)
 
-                    # Set the forward and left velocities
-                    fwd_vel = resultant_force[0] / 20
-                    left_vel = resultant_force[1] / 20
-                    print(f"fwd: {fwd_vel:.3f}, left: {left_vel:.3f}")
+                # Set the forward and left velocities
+                fwd_vel = resultant_force[0] / attractive_magnitude / 5
+                left_vel = resultant_force[1] / attractive_magnitude / 5
+                #print(f"fwd: {fwd_vel:.3f}, left: {left_vel:.3f}")
 
-                    # Set control command to move towards the goal while avoiding obstacles
-                    control_command = [fwd_vel, left_vel, height_desired, yaw_desired]
-                    
-                    # Set previous velocities
-                    fwd_vel_prev = fwd_vel
-                    leftprev_pos_vel_prev = left_vel
+                # Set control command to move towards the goal while avoiding obstacles
+                control_command = [fwd_vel, left_vel, height_desired, yaw_desired]
+                
+                # Set previous velocities
+                fwd_vel_prev = fwd_vel
+                leftprev_pos_vel_prev = left_vel
 
             else:
-                control_command = [fwd_vel_prev, left_vel_prev, height_desired, yaw_desired]
+                control_command = prev_command
 
         case 'land':
 
             if grade == 5.5:
                 control_command = [0.0, 0.0, 0.01, 0.0]
+                if sensor_data['range_down'] < 0.06:
+                    control_command = [0.0, 0.0,-10 , 0.0]
+                    print("HELL YEAH!!! 6.0 MAMA")
             else:
                 # If we only have one landing pad location, continue moving towards goal until we have the second one
                 if second_landpad_location is None and landpad_timer < 4 * 100:
@@ -245,60 +253,89 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                     landpad_timer = 0
                     control_command = [0.0, 0.0, height_desired, 0.0]
 
-                elif second_landpad_location is not None and not goal_reached(drone_location[:2], goal, tol=0.02): # If we have two landing pad locations, move towards the midpoint between the two
+                elif second_landpad_location is not None and not goal_reached(drone_location[:2], goal, tol=0.05) and not going_down: # If we have two landing pad locations, move towards the midpoint between the two
                     #print('Second Landing Pad Location Found! Move Towards the Midpoint Between the Two Landing Pads')
                     attractive_force, attractive_force_wf, attractive_magnitude = calc_attractive_force(sensor_data)
-                    control_command = [attractive_force[0] / 50, attractive_force[1] / 50, height_desired, 0.0]
+                    control_command = [attractive_force[0] / attractive_magnitude / 5, attractive_force[1] / attractive_magnitude / 5, height_desired, 0.0]
                 else:
                     if not is_landed:
-                        # print('Landing on the Landing Pad')
-                        control_command = [0.0, 0.0, 0.05, 0.0]
-                        if sensor_data['range_down'] < 0.1:
-                            control_command = [0.0, 0.0, -1, 0.0]
+                        #print('Landing on the Landing Pad')
+                        going_down = True
+                        prev_command[2] -= 0.02    #0.002
+                        control_command = [0.0, 0.0, prev_command[2], 0.0]
+                        np.save('pos_hist', {'height': prev_pos, 'dheight': prev_dpos, 'ddheight': prev_ddpos})
+                        print("landing sequence")
+                        #control_command = [0.0,0.0, -10, 0.0]
+                        
+                        if sensor_data['range_down'] <  0.01:    #0.02:
+                            control_command = [0.0, 0.0, 0.0, 0.0]
+                            print("landing pad touched, switch to takeoff")
                             is_landed = True
                             waiting_takeoff = True
                             landpad_timer = 0
                             #mode = 'find goal'
-                            goal = firstpass_goal
+                            goal = STARTING_POSE
                             grade = 5.0
-                            print('Landed on the Landing Pad. \n Grade Increased to 5.0 \n')
+                            print('Landed on the Landing Pad. \nGrade Increased to 5.0')
                     else:
                         if waiting_takeoff:
-                            if landpad_timer < 20:
-                                control_command = [0.0, 0.0, -1, 0.0]
-                                landpad_timer += 1
+                            if landpad_timer < 10:
+                                control_command = [0.0, 0.0, 0.0 + landpad_timer*0.025, 0.0]
+                                landpad_timer += 1.0
+                                print("landing timer: ", landpad_timer)
                             else:
-                                print("Ready to take off!")
+                                print("Going HOME")
                                 waiting_takeoff = False
                                 control_command = [0.0, 0.0, height_desired, 0.0]
                                 mode = 'find goal'
+                                goal = STARTING_POSE
+                                grade = 5.25
                         else:
                             mode = 'find goal' 
                             # landpad_timer = 0
                             control_command = [0.0, 0.0, height_desired, 0.0]
+            #if t % UPDATE_FREQUENCY == 0:
+                #update_visualization(sensor_data, map, attractive_force_wf, attractive_magnitude, [1,1], )
+                        
 
-    map = occupancy_map(sensor_data)
-
-    # Update the previous position
-    prev_pos.append(drone_location)
-    # First derivative of position
-    if len(prev_pos) > 1:
-        prev_dpos.append((drone_location - prev_pos[-2]))
-    # Second order derivative
-    if len(prev_dpos) > 1:
-        prev_ddpos.append((prev_dpos[-1] - prev_dpos[-2]))
+    #map = occupancy_map(sensor_data)
+    prev_command = control_command
+    if OUTPUT_CMD:
+        print("Cmd: ", control_command)
 
     if t % PREV_HEIGHT_UPDATE == 0:
         prev_range_down = sensor_data['range_down']
+        # Update the previous position
+        prev_pos.append(drone_location)
+        # First derivative of position
+        if len(prev_pos) > 1:
+            prev_dpos.append((drone_location - prev_pos[-2]))
+        # Second order derivative
+        if len(prev_dpos) > 1:
+            prev_ddpos.append((prev_dpos[-1] - prev_dpos[-2]))
         if len(prev_pos) > NB_POINTS_HIST:
-            np.save('pos_hist', {'height': prev_pos, 'dheight': prev_dpos, 'ddheight': prev_ddpos})
             prev_pos.pop(0)
         if len(prev_dpos) > NB_POINTS_HIST:
             prev_dpos.pop(0)
         if len(prev_ddpos) > NB_POINTS_HIST:
             prev_ddpos.pop(0)
     t += 1
+    control_command[0], control_command[1] = clip_cmd(control_command, 0.14)
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
+
+def clip_cmd(cmd, v_max):
+    va, vb = cmd[0], cmd[1]
+    if abs(va) > abs(vb):
+        if abs(va) > v_max:
+            reduction = v_max / abs(va)
+            va *= reduction
+            vb *= reduction
+    if abs(vb) > abs(va):
+        if abs(vb) > v_max:
+            reduction = v_max / abs(vb)
+            va *= reduction
+            vb *= reduction
+    return va, vb
 
 def goal_reached(drone_location, goal, tol=0.075):
     """
@@ -348,7 +385,7 @@ def assign_goal(sensor_data, map):
     Assigns the goal location based on the current goal. Eg. Cross the map, find landing pad, find pink box, etc.
     '''
     global mode, firstpass_goal, grade, list_of_visited_locations, goal, first_landpad_location, second_landpad_location, prev_height, middle_landpad_location, height_desired
-    global grid_index, height_desired, stabilizing, stabilize_counter, next_edge_goal, y_coords, GRID_POINTS
+    global grid_index, height_desired, stabilizing, stabilize_counter, next_edge_goal, y_coords, GRID_POINTS, prev_command
     drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
     match mode:
         case 'takeoff':
@@ -376,7 +413,7 @@ def assign_goal(sensor_data, map):
                 # Do grid search for the landing pad by assigning next goal in grid
                 # Update Visited Locations making sure not to add the same location twice
                 # print('Range Down: ', sensor_data['range_down'])
-                landing = is_above_landpad(sensor_data)
+                landing = edge_detected(sensor_data)
                 if landing and stabilizing:
                     if stabilize_counter < 10*UPDATE_FREQUENCY:
                         stabilize_counter += 1
@@ -385,7 +422,8 @@ def assign_goal(sensor_data, map):
                         stabilizing = False
                         goal = next_edge_goal
                 if landing:
-                    height_desired = sensor_data['range_down']
+                    #height_desired = sensor_data['range_down']
+                    height_desired = DEFAULT_HEIGHT - 0.115
                     print('First Landing Pad Location Found!')
                     #height_desired = sensor_data['range_down']
                     prev_height = sensor_data['range_down']
@@ -393,13 +431,21 @@ def assign_goal(sensor_data, map):
                     #stabilizing = True
                     print('First Landing Pad Location: ', first_landpad_location)
                     mode = 'land'
-                    if goal_reached(drone_location[:2], goal, tol=0.3):
+                    if goal_reached(drone_location[:2], goal, tol=0.2):
                         grid_index = (grid_index + 1) % len(GRID_POINTS)
                         print('Goal to close to landing zone! Next: ', goal)
                         goal = GRID_POINTS[grid_index]
-                    next_edge_goal = goal
-                    stabilize_counter = 0
+                    
+                    dir = goal - drone_location
+                    goal = drone_location + dir/np.linalg.norm(dir) * 0.10
+                    middle_landpad_location = goal
+                    second_landpad_location = goal
+                    print("Current pos: ", drone_location)
+                    print("Next goal: ", goal)
+                    #next_edge_goal = goal
+                    #stabilize_counter = 0
                     #goal = first_landpad_location + np.array([0.0, 0.01])
+                    return goal
                 else: 
                     if goal_reached(drone_location[:2], goal):
                         # Assign the next goal location
@@ -414,30 +460,30 @@ def assign_goal(sensor_data, map):
                     return goal
         
                 
-            elif grade == 5.0 or grade == 5.25:
+            elif grade >= 5.0:
                 
                 # If drone is not at starting position, return to starting position
-                if np.linalg.norm(drone_location - startpos[:2]) > 0.1:
+                if goal_reached(drone_location, goal):
                     #print('Return to the Starting Location: ', startpos[:2])
-                    goal = startpos[:2]
-                    mode = 'find goal'
+                    goal = STARTING_POSE
+                    mode = 'land'
+                    grade = 5.5
                     return goal
                 else:
+                    if edge_detected(sensor_data):
+                        height_desired = DEFAULT_HEIGHT
+                        print("Adjusting height: ", height_desired)
                     # print('Increase Grade to 5.5')
-                    grade = 5.5
-                    mode = 'land'
-                    goal = startpos[:2]
                     return goal
         
         case 'land':
             # Find when the down sensor jumps to a higher number (When it leaves the landing pad)
             if grade == 5.5:
                 # Land on starting pad
-                goal = startpos[:2]
                 return goal
             
             
-            if is_above_landpad(sensor_data) and second_landpad_location is None:
+            if edge_detected(sensor_data) and second_landpad_location is None:
                 #height_desired = sensor_data['range_down']
                 print('Second Landing Pad Location Found!')
                 second_landpad_location = drone_location
@@ -450,7 +496,7 @@ def assign_goal(sensor_data, map):
                 middle_landpad_location = goal
                 print("Moving to middle of landing pad: ", goal)
                 return goal
-            # elif is_above_landpad(sensor_data) and second_landpad_location is not None:
+            # elif edge_detected(sensor_data) and second_landpad_location is not None:
             #     # adjust height
             #     print("Adjusting height to landing pad")
             #     height_desired = sensor_data['range_down']
@@ -469,13 +515,13 @@ def assign_goal(sensor_data, map):
                 return goal
             
             
-def is_above_landpad(sensor_data):
+def edge_detected(sensor_data):
     '''
     This function checks if the drone is above the landing pad.
     '''
     #print(abs(sensor_data['range_down'] - prev_range_down))
     #print(abs(sensor_data['range_down'] - prev_range_down))
-    if abs(sensor_data['range_down'] - prev_range_down) > 0.03:
+    if abs(sensor_data['range_down'] - prev_range_down) > LANDING_PAD_THRESHOLD:
         return True
     else:
         return False
@@ -484,7 +530,7 @@ def waypoint_obstructed(goal, map, margin=0.3):
     map = map.copy() < -0.2
     for (x,y), value in np.ndenumerate(map):
         if value:
-            pos_obstacle = np.array([x, y]) * 0.1
+            pos_obstacle = np.array([x, y]) * res_pos
             if np.linalg.norm(pos_obstacle - goal) < margin:
                 return True
     return False
@@ -574,7 +620,7 @@ def compute_repulsive_force(occupancy_map, drone_location):
         obstacle_locations = np.column_stack((obstacle_indices[0], obstacle_indices[1]))
         
         # Convert Obstacle Locations to from Grid to Meters
-        obstacle_locations = obstacle_locations * 0.1
+        obstacle_locations = obstacle_locations * res_pos
         # print('Obstacle Locations Before Limit: ', obstacle_locations)
         # print('Drone Location: ', drone_location)
         distances = np.linalg.norm(obstacle_locations - drone_location, axis=1)
@@ -584,7 +630,7 @@ def compute_repulsive_force(occupancy_map, drone_location):
         # print('Distances: ', distances)
 
         # Delete Obstacles more than N meters away from the drone location
-        N = 1.0
+        N = 0.28
         
         obstacle_locations = obstacle_locations[distances < N]
         directions = directions[distances < N]
@@ -596,7 +642,7 @@ def compute_repulsive_force(occupancy_map, drone_location):
         # print('Obstacle Locations: ', obstacle_locations)
         # print('Directions: ', directions)
 
-        magnitudes = 1 / distances**1.8 / num_close_obstacles # Example: inverse-distance function
+        magnitudes = 1 / distances / num_close_obstacles # Example: inverse-distance function
         # Sum up repulsive forces from all obstacles
         repulsive_force = np.flip(np.sum(magnitudes[:, np.newaxis] * directions, axis=0))
     
@@ -643,18 +689,18 @@ def convert_to_body_frame(vector, yaw):
 def update_visualization(sensor_data, map, attractive_force, attractive_magnitude, repulsive_force, repulsive_magnitude):
     global canvas, t, k_a, k_r, goal, possible_pad_locations, num_possible_pads_locations, UPDATE_FREQUENCY
     arrow_size = 15
-    map_size_x = 30*GROWING_FACTOR
-    map_size_y = 50*GROWING_FACTOR
+    map_size_x = int(3/res_pos*GROWING_FACTOR)
+    map_size_y = int(5/res_pos*GROWING_FACTOR)
     
     # Calculate Resultant Force in World Frame for Visualization
     resultant_force = (k_a*attractive_force) + (k_r*repulsive_force)
     
     if t % UPDATE_FREQUENCY == 0:
         #print(f'xglobal: {sensor_data["x_global"]}, yglobal: {sensor_data["y_global"]}')
-        xdrone = int(sensor_data['y_global'] * 10*GROWING_FACTOR)  # Swap X and Y axes
-        ydrone = int(sensor_data['x_global'] * 10*GROWING_FACTOR)  # Swap X and Y axes
-        xgoal = int(goal[1] * 10*GROWING_FACTOR)  # Swap X and Y axes
-        ygoal = int(goal[0] * 10*GROWING_FACTOR)  # Swap X and Y axes
+        xdrone = int(sensor_data['y_global'] * 1/res_pos*GROWING_FACTOR)  # Swap X and Y axes
+        ydrone = int(sensor_data['x_global'] * 1/res_pos*GROWING_FACTOR)  # Swap X and Y axes
+        xgoal = int(goal[1] * 1/res_pos*GROWING_FACTOR)  # Swap X and Y axes
+        ygoal = int(goal[0] * 1/res_pos*GROWING_FACTOR)  # Swap X and Y axes
         # print(f'xdrone: {xdrone}, ydrone: {ydrone}, xgoal: {xgoal}, ygoal: {ygoal}')
         if canvas is None:
             # Create an empty canvas
@@ -714,7 +760,7 @@ def update_visualization(sensor_data, map, attractive_force, attractive_magnitud
 min_x, max_x = 0, 5.0 # meter
 min_y, max_y = 0, 3.0 # meter
 range_max = 2.0 # meter, maximum range of distance sensor
-res_pos = 0.1 # meter
+res_pos = 0.05 # meter
 conf = 0.2 # certainty given by each measurement
 t = 0 # only for plotting
 

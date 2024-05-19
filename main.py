@@ -125,9 +125,10 @@ class KeyboardController:
         #     for name, value in self.sensor_data.items():
         #         print(f'{name}: {value:3.3f} ', end='\n')
         cmd = get_command(self.sensor_data)
-        if cmd[2] == -1:
+        if cmd[2] == -10:
             self.is_ready = False
             self._cf.commander.send_stop_setpoint()
+            self._cf.close_link()
         else:
             self.is_ready = True
             self._command = [cmd[0],cmd[1],cmd[3],cmd[2]]
@@ -189,7 +190,7 @@ if __name__ == "__main__":
 
     print("INITIALIZING KALMAN ESTIMATOR", end="\r")
     cf.param.set_value('kalman.resetEstimation', '1')
-    time.sleep(0.5)
+    time.sleep(1)
     print("INITIALIZING KALMAN ESTIMATOR: DONE")
     controller.is_ready = True
 
