@@ -13,16 +13,11 @@ timer_done = None
 
 # Self defined global variables
 setpoint_idx = 0
-flag = 1 
+mode = 1 
 first_seen = 0
 
 setpoint_traj = np.array(
-[[1.0, 1.2, 0.5],
- [1.0, 2.2, 0.5],
- [1.0, 1.6, 0.5],
- [3.2, 1.5, 0.5],
- [3.4, 1.5, 0.5],
- [3.5, 1.5, 0.5],
+[[3.5, 1.5, 0.5],
  [3.67, 2.80, 0.5],
  [3.67, 2.60, 0.5],
  [3.67, 2.40, 0.5],
@@ -137,7 +132,7 @@ setpoint_traj = np.array(
 
 # This is the main function where you will implement your control algorithm
 def get_command(sensor_data, camera_data, dt):
-    global on_ground, startpos, setpoint_idx, setpoint_traj, flag, first_seen
+    global on_ground, startpos, setpoint_idx, setpoint_traj, mode, first_seen
 
     # Take off
     if startpos is None:
@@ -152,9 +147,6 @@ def get_command(sensor_data, camera_data, dt):
     map = occupancy_map(sensor_data)
     
     current_setpoint = setpoint_traj[setpoint_idx]
-    control_command = potential_field(map, sensor_data, current_setpoint)
-
-    #print(f"stepoint: {current_setpoint}")
 
     if setpoint_reached(sensor_data, current_setpoint, margin=0.06):
          print(f"Setpoint {setpoint_idx} reached!")
@@ -164,35 +156,34 @@ def get_command(sensor_data, camera_data, dt):
         print(f"Deleted setpoint: {setpoint_idx}")
         setpoint_idx += 1
 
-    
-    if flag == 1 and sensor_data['range_down'] < 0.45 and sensor_data['x_global'] > 3.6: # detection of pad
+    # Detection of pad (needs to be changed for the hardware)
+    if mode == 1 and sensor_data['range_down'] < 0.45 and sensor_data['x_global'] > 3.6: 
         if first_seen == 0:
             print("Potential landing pad detected")
             first_seen = sensor_data['t']
         
         if sensor_data['t'] - first_seen > 0.2:
             print("Landing pad detected for more than 0.2s")
-            flag += 1  
+            mode += 1  
     else:
         first_seen = 0
     
-    if flag == 2: # Go down to landing pad
+    if mode == 2: # Go down to landing pad
         current_setpoint = np.array([sensor_data['x_global'],sensor_data['y_global'],0.02])
-        control_command = potential_field(map, sensor_data, current_setpoint)
     
-    if sensor_data['range_down'] < 0.06 and flag == 2: 
-        flag += 1
+    if sensor_data['range_down'] < 0.06 and mode == 2: 
+        mode += 1
     
-    if flag == 3: # Go back to takeoff pad
+    if mode == 3: # Go back to takeoff pad
         current_setpoint = np.array([startpos[0],startpos[1], 0.5, 0])
-        control_command = potential_field(map, sensor_data, current_setpoint)
     
-    if flag == 3 and setpoint_reached(sensor_data, current_setpoint):
-        flag += 1
+    if mode == 3 and setpoint_reached(sensor_data, current_setpoint):
+        mode += 1
     
-    if flag == 4: # Descend to takeoff pad
+    if mode == 4: # Descend to takeoff pad
         current_setpoint = np.array([startpos[0],startpos[1],0.05])
-        control_command = potential_field(map, sensor_data, current_setpoint)
+    
+    control_command = potential_field(map, sensor_data, current_setpoint)
     
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
 
