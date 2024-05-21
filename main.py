@@ -194,7 +194,7 @@ if __name__ == "__main__":
     print("INITIALIZING KALMAN ESTIMATOR: DONE")
     controller.is_ready = True
 
-    plt.show(block=False)
+    #plt.show(block=False)
 
     while controller.is_connected:
         #print("IN AIR" if controller.in_air else "ON GROUND", end="\r")

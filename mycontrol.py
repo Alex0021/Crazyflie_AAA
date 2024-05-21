@@ -14,7 +14,7 @@ if IN_SIM:
     UPDATE_FREQUENCY = 10
     yaw_desired = 0.3
 else:
-    STARTING_POSE = [2.0,1.0]
+    STARTING_POSE = [2.0,1.5]
     UPDATE_FREQUENCY = 2
     yaw_desired = 0.3 * 180 / np.pi   
 
@@ -30,7 +30,7 @@ startpos = None
 timer_done = None
 going_down = False
 mode = 'takeoff' # 'takeoff', 'find goal', 'land'
-firstpass_goal = np.array([4.5, 1.0]) # Location of the first goal
+firstpass_goal = np.array([4.5, 1.5]) # Location of the first goal
 goal = firstpass_goal
 canvas = None
 fwd_vel_prev = 0
@@ -44,6 +44,7 @@ prev_command = np.zeros(4)
 k_a = 1.0 # gain attraction force
 k_r = 0.85 # gain repulsive force
 k_s = 0.1 # gain stucknees force
+cmd_alpha = 0.5
 permanant_obstacles = 0
 first_landpad_location = None
 second_landpad_location = None
@@ -128,6 +129,9 @@ def render(data):
     artists["line_ddheight"].set_data(np.arange(-len(ddy)+1, 1), ddy)
     return artists.values()
 
+def filter(cmd):
+    return cmd_alpha * np.array(cmd) + (1 - cmd_alpha) * np.array(prev_command)
+
 # This is the main function where you will implement your control algorithm
 def get_command(sensor_data, camera_data=None, dt=0.1):
     global on_ground, startpos, mode, ctrl_timer, t, fwd_vel_prev, left_vel_prev, yaw_desired, height_desired, prev_range_down
@@ -174,14 +178,14 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
     match mode:
         case 'takeoff':
             # Set a timer and rise to desired height for 3 seconds
-            if ctrl_timer is None:
-                ctrl_timer = time.time()
+            # if ctrl_timer is None:
+            #     ctrl_timer = time.time()
 
-            if time.time() - ctrl_timer < 1:
-                control_command = [0.0, 0.0, height_desired, 0.0]
-                return control_command
-            else:
-                mode = 'find goal'
+            # if time.time() - ctrl_timer < 1:
+            #     control_command = [0.0, 0.0, height_desired, 0.0]
+            #     return control_command
+            # else:
+            mode = 'find goal'
         case 'find goal':
         
 
@@ -299,7 +303,6 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                         
 
     #map = occupancy_map(sensor_data)
-    prev_command = control_command
     if OUTPUT_CMD:
         print("Cmd: ", control_command)
 
@@ -321,6 +324,8 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
             prev_ddpos.pop(0)
     t += 1
     control_command[0], control_command[1] = clip_cmd(control_command, 0.14)
+    control_command = filter(control_command)
+    prev_command = control_command
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
 
 def clip_cmd(cmd, v_max):
@@ -630,7 +635,7 @@ def compute_repulsive_force(occupancy_map, drone_location):
         # print('Distances: ', distances)
 
         # Delete Obstacles more than N meters away from the drone location
-        N = 0.28
+        N = 0.4
         
         obstacle_locations = obstacle_locations[distances < N]
         directions = directions[distances < N]
@@ -642,7 +647,7 @@ def compute_repulsive_force(occupancy_map, drone_location):
         # print('Obstacle Locations: ', obstacle_locations)
         # print('Directions: ', directions)
 
-        magnitudes = 1 / distances / num_close_obstacles # Example: inverse-distance function
+        magnitudes = 1 / distances**1.8 / num_close_obstacles # Example: inverse-distance function
         # Sum up repulsive forces from all obstacles
         repulsive_force = np.flip(np.sum(magnitudes[:, np.newaxis] * directions, axis=0))
     
