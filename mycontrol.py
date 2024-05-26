@@ -27,6 +27,10 @@ PREV_HEIGHT_UPDATE = 4
 on_ground = True
 DEFAULT_HEIGHT = 0.4
 height_desired = DEFAULT_HEIGHT
+MAX_FORCE_GOAL = 1.5
+MIN_FORCE_GOAL = 1.0
+MIN_DIST_GOAL_FORCE = 0.1
+MAX_SPEED = 0.15
 timer = None
 ctrl_timer = None
 startpos = None
@@ -41,12 +45,13 @@ left_vel_prev = 0
 prev_pos = []
 prev_dpos = []
 prev_ddpos = []
+cmd_hist = np.zeros((1_000_000, 4))
 next_edge_goal = None
 num_loops_stuck = 0
 prev_command = np.zeros(4)
 k_a = 1.0 # gain attraction force
-k_r = 1.0 # gain repulsive force
-k_s = 0.2 # gain stucknees force
+k_r = 1.25 # gain repulsive force
+k_s = 0.5 # gain stucknees force
 cmd_alpha = 0.5
 permanant_obstacles = 0
 first_landpad_location = None
@@ -226,8 +231,8 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                 update_visualization(sensor_data, map, attractive_force_wf, attractive_magnitude, repulsive_force_wf, repulsive_magnitude)
 
                 # Set the forward and left velocities
-                fwd_vel = resultant_force[0] / attractive_magnitude / 5
-                left_vel = resultant_force[1] / attractive_magnitude / 5
+                fwd_vel = resultant_force[0] / 10
+                left_vel = resultant_force[1] / 10
                 #print(f"fwd: {fwd_vel:.3f}, left: {left_vel:.3f}")
 
                 # Set control command to move towards the goal while avoiding obstacles
@@ -269,7 +274,7 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                 if not goal_reached(drone_location[:2], goal, tol=0.05) and not going_down: # If we have two landing pad locations, move towards the midpoint between the two
                     #print('Second Landing Pad Location Found! Move Towards the Midpoint Between the Two Landing Pads')
                     attractive_force, attractive_force_wf, attractive_magnitude = calc_attractive_force(sensor_data)
-                    control_command = [attractive_force[0] / attractive_magnitude / 5, attractive_force[1] / attractive_magnitude / 5, height_desired, 0.0]
+                    control_command = [attractive_force[0] / 10, attractive_force[1] / 10, height_desired, 0.0]
                 else:
                     if np.any(second_landpad_location):
                         if not is_landed:
@@ -293,7 +298,7 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                         else:
                             if waiting_takeoff:
                                 if landpad_timer < 10:
-                                    control_command = [0.0, 0.0, 0.0 + landpad_timer*0.025, 0.0]
+                                    control_command = [0.0, 0.0, 0.05 + landpad_timer*0.025, 0.0]
                                     landpad_timer += 1.0
                                     print("landing timer: ", landpad_timer)
                                 else:
@@ -315,7 +320,7 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
         case 'home':
             if not goal_reached(drone_location[:2], goal, tol=0.05):
                 attractive_force, attractive_force_wf, attractive_magnitude = calc_attractive_force(sensor_data)
-                control_command = [attractive_force[0] / attractive_magnitude / 5, attractive_force[1] / attractive_magnitude / 5, height_desired, 0.0]
+                control_command = [attractive_force[0] / 10, attractive_force[1] / 10, height_desired, 0.0]
                         
 
     #map = occupancy_map(sensor_data)
@@ -339,10 +344,12 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
             prev_dpos.pop(0)
         if len(prev_ddpos) > NB_POINTS_HIST:
             prev_ddpos.pop(0)
-    t += 1
-    control_command[0], control_command[1] = clip_cmd(control_command, 0.15)
+    
+    control_command[0], control_command[1] = clip_cmd(control_command, MAX_SPEED)
     control_command = filter(control_command)
     prev_command = control_command
+    cmd_hist[t] = control_command
+    t += 1
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
 
 def clip_cmd(cmd, v_max):
@@ -505,6 +512,7 @@ def assign_goal(sensor_data, map):
                     #height_desired = DEFAULT_HEIGHT
 
                     print("Second edge detected! ", second_landpad_location) 
+                    np.save('cmd_hist', cmd_hist[:t])
 
                     goal[0] = second_landpad_location[0] - 0.1
                     
@@ -656,7 +664,7 @@ def compute_repulsive_force(occupancy_map, drone_location):
         # print('Obstacle Locations: ', obstacle_locations)
         # print('Directions: ', directions)
 
-        magnitudes = 1 / distances**1.3 / num_close_obstacles # Example: inverse-distance function
+        magnitudes = (1 / (distances+0.5)**2 - 0.75) / num_close_obstacles # Example: inverse-distance function
         # Sum up repulsive forces from all obstacles
         repulsive_force = np.flip(np.sum(magnitudes[:, np.newaxis] * directions, axis=0))
     
@@ -686,11 +694,13 @@ def ensure_strength(vector, vector_wf, magnitude):
     Ensure the strength of the vector is at least N:
     Good values for N range from 3 to 10
     """
-    N = 5
-    if magnitude < N:
-        vector = (vector / magnitude) * N
-        vector_wf = (vector_wf / magnitude) * N
-        magnitude = N
+    dist_to_goal = np.linalg.norm(vector)
+    if dist_to_goal > MIN_DIST_GOAL_FORCE:
+        vector = vector / magnitude * MAX_FORCE_GOAL
+        vector_wf = vector_wf / magnitude * MAX_FORCE_GOAL
+    else:
+        vector = vector / magnitude * MIN_FORCE_GOAL
+        vector_wf = vector_wf / magnitude * MIN_FORCE_GOAL
     return vector, vector_wf, magnitude
 
 def convert_to_body_frame(vector, yaw):
@@ -897,4 +907,4 @@ def clip_angle(angle):
         angle -= 2*np.pi
     if angle < -np.pi:
         angle += 2*np.pi
-    return angle
+    return angl
