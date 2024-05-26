@@ -290,7 +290,7 @@ def get_command(sensor_data):
 
             print('Moving to: ', goal)
         if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
-            if np.linalg.norm(first_landpad_location - drone_location) > 0.1:
+            if np.linalg.norm(first_landpad_location - drone_location) > 0.15:
                 second_landpad_location = drone_location
                 #height_desired = DEFAULT_HEIGHT
 
@@ -424,7 +424,7 @@ def obstacle_field(map, sensor_data, goal_vec):
     d_min1 = d_min2 = np.inf
 
     # Maximum distance in which drone is being reppeld from obstacels
-    max_obs_dist = 0.3 # 0.3
+    max_obs_dist = 0.4 # 0.3
     # If the angle beteween vec_min1 and vec is greater than "angle_thresh" then vec_min2 = vec
     angle_thresh = np.pi/3
     
@@ -450,7 +450,7 @@ def obstacle_field(map, sensor_data, goal_vec):
     # Add the repultion force together In the case of closeby obstacels from multiple angles
     v = vec_min1 + vec_min2                         
                      
-    if t % 200 == 0:
+    if t % 10 == 0:
         w,h = map.shape
         map = map.astype(np.uint8)*255
         scale = 10
@@ -466,8 +466,8 @@ def obstacle_field(map, sensor_data, goal_vec):
         map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] - obs_vec[1], pos_vec[0] - obs_vec[0]) , (255,0,0), 2)
         map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] + goal_vec[1], pos_vec[0] + goal_vec[0]) , (255,0,0), 2)
 
-        #cv2.imshow('Obstacles avoidance', map)
-        #cv2.waitKey(1)    
+        cv2.imshow('Obstacles avoidance', map)
+        cv2.waitKey(1)    
     
     return v
 
