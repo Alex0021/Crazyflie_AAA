@@ -135,6 +135,12 @@ setpoint_traj = np.array(
  [4.82, 0.40, height_desired],
  [4.82, 0.20, height_desired]])
 
+# Points on opposite side of map (subtract smallest value on x-axis)
+# Points on opposite side of map (subtract smallest value on x-axis)
+setpoint_traj2 = [setpoint_traj[:,0]-3.5,setpoint_traj[:,1],setpoint_traj[:,2]]
+setpoint_traj2 = np.array(setpoint_traj2).T
+print(setpoint_traj2)
+
 # The available ground truth state measurements can be accessed by calling sensor_data[item]. All values of "item" are provided as defined in main.py lines 296-323. 
 # The "item" values that you can later use in the hardware project are:
 # "x_global": Global X position
@@ -258,7 +264,7 @@ def get_command(sensor_data):
     if mode == 3 and setpoint_reached(sensor_data, current_setpoint):
         if not created_spiral:
             print("Close to home pad: Creating spiral")
-            setpoint_traj = create_spiral(points_in_spiral, drone_location[:2])
+            setpoint_traj = setpoint_traj2
             setpoint_idx = 0
             created_spiral = True
             first_landpad_location = None
@@ -587,46 +593,46 @@ def alltitude_controller(sensor_data, waypoint, alt_error_thresh=0.3):
 
 
 # HELPERS:
-def spiral(n):
-    n+=1 # Start counting qt 0. Adapting from matlab to Python
-    k=np.ceil((np.sqrt(n)-1)/2)
-    t=2*k+1
-    m=t**2 
-    t=t-1
-    if n>=m-t:
-        return k-(m-n),-k        
-    else :
-        m=m-t
-    if n>=m-t:
-        return -k,-k+(m-n)
-    else:
-        m=m-t
-    if n>=m-t:
-        return -k+(m-n),k 
-    else:
-        return k,k-(m-n-t)
+# def spiral(n):
+#     n+=1 # Start counting qt 0. Adapting from matlab to Python
+#     k=np.ceil((np.sqrt(n)-1)/2)
+#     t=2*k+1
+#     m=t**2 
+#     t=t-1
+#     if n>=m-t:
+#         return k-(m-n),-k        
+#     else :
+#         m=m-t
+#     if n>=m-t:
+#         return -k,-k+(m-n)
+#     else:
+#         m=m-t
+#     if n>=m-t:
+#         return -k+(m-n),k 
+#     else:
+#         return k,k-(m-n-t)
 
-def delete_points(points):
-    to_keep = []
-    to_keep.append(points[0])
-    for i in range(1, len(points)-1):
-        if points[i][0] == points[i-1][0] and points[i][0] == points[i+1][0]:
-            pass
-        elif points[i][1] == points[i-1][1] and points[i][1] == points[i+1][1]:
-            pass
-        else:
-            to_keep.append(points[i])
+# def delete_points(points):
+#     to_keep = []
+#     to_keep.append(points[0])
+#     for i in range(1, len(points)-1):
+#         if points[i][0] == points[i-1][0] and points[i][0] == points[i+1][0]:
+#             pass
+#         elif points[i][1] == points[i-1][1] and points[i][1] == points[i+1][1]:
+#             pass
+#         else:
+#             to_keep.append(points[i])
 
-    return to_keep
+#     return to_keep
 
-def create_spiral(points_in_spiral, center):
-    myPoints = []
-    for i in range(points_in_spiral):
-        myPoints.append(spiral(i))
-    myPoints = delete_points(myPoints)
-    myPoints = 0.3*np.array(myPoints) + center
-    myPoints = np.concatenate([myPoints, height_desired*np.ones((len(myPoints),1))], axis=1)
-    return myPoints
+# def create_spiral(points_in_spiral, center):
+#     myPoints = []
+#     for i in range(points_in_spiral):
+#         myPoints.append(spiral(i))
+#     myPoints = delete_points(myPoints)
+#     myPoints = 0.3*np.array(myPoints) + center
+#     myPoints = np.concatenate([myPoints, height_desired*np.ones((len(myPoints),1))], axis=1)
+#     return myPoints
 
 
 def normalize_vector(v, threshold=1e-1):
