@@ -615,11 +615,12 @@ def delete_points(points):
 
     return to_keep
 
-def create_spiral(points_in_spiral):
+def create_spiral(points_in_spiral, center):
     myPoints = []
     for i in range(points_in_spiral):
         myPoints.append(spiral(i))
     myPoints = delete_points(myPoints)
+    myPoints = 0.3*np.array(myPoints) + center
     myPoints = np.concatenate([myPoints, height_desired*np.ones((len(myPoints),1))], axis=1)
     return myPoints
 
