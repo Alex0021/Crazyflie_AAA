@@ -181,11 +181,8 @@ def get_command(sensor_data, camera_data, dt):
     
     if mode == 3 and setpoint_reached(sensor_data, current_setpoint):
         if not created_spiral:
-            myPoints = []
-            for i in range(points_in_spiral):
-                myPoints.append(spiral(i))
-            myPoints = delete_points(myPoints)
-            GRID_POINTS = current_setpoint + np.array(myPoints)
+            setpoint_traj = create_spiral(points_in_spiral)
+            created_spiral = True
         mode += 1
     
     if mode == 4: # Descend to takeoff pad
@@ -447,6 +444,13 @@ def delete_points(points):
             to_keep.append(points[i])
 
     return to_keep
+
+def create_spiral(points_in_spiral):
+    myPoints = []
+    for i in range(points_in_spiral):
+        myPoints.append(spiral(i))
+    myPoints = delete_points(myPoints)
+    return myPoints
 
 
 def normalize_vector(v, threshold=1e-1):
