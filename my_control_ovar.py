@@ -245,9 +245,13 @@ def get_command(sensor_data):
         if not created_spiral:
             setpoint_traj = create_spiral(points_in_spiral)
             created_spiral = True
+            setpoint_idx = 0
         mode += 1
-    
-    if mode == 4: # Descend to takeoff pad
+   
+    if mode == 4:
+        pass
+
+    if mode == 5: # Descend to takeoff pad
         current_setpoint = np.array([startpos[0],startpos[1],0.05])
 
     prev_command = control_command
