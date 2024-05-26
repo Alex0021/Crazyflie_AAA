@@ -3,17 +3,17 @@ import sys
 import time
 from threading import Event
 from pynput import keyboard
-from mycontrol import get_command
+from my_control_ovar import get_command
 import math
 import matplotlib.pyplot as plt
 
-import cflib.crtp
+import cflib.crtp 
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils import uri_helper
 from cflib.crazyflie.log import LogConfig
-
+ 
 
 URI = uri_helper.uri_from_env(default="radio://0/40/2M/E7E7E7E704")
 
@@ -190,17 +190,18 @@ if __name__ == "__main__":
 
     print("INITIALIZING KALMAN ESTIMATOR", end="\r")
     cf.param.set_value('kalman.resetEstimation', '1')
-    time.sleep(1)
+    time.sleep(2)
     print("INITIALIZING KALMAN ESTIMATOR: DONE")
     controller.is_ready = True
 
     #plt.show(block=False)
+
 
     while controller.is_connected:
         #print("IN AIR" if controller.in_air else "ON GROUND", end="\r")
         #if controller.in_air:
         if controller.is_ready:
             cf.commander.send_hover_setpoint(*controller._command)
-        time.sleep(0.01)
+        time.sleep(0.02)
 
     

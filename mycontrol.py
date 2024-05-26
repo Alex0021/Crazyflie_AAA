@@ -16,9 +16,9 @@ if IN_SIM:
     LANDING_PAD_TOUCH_HEIGHT = 0.05
     LANDING_PAD_THRESHOLD = 0.08
 else:
-    STARTING_POSE = [0.0,0.9]
+    STARTING_POSE = [0.2,1.4]
     UPDATE_FREQUENCY = 2
-    yaw_desired = 0.15 * 180 / np.pi 
+    yaw_desired = 0.2 * 180 / np.pi 
     LANDING_PAD_TOUCH_HEIGHT = 0.01 
     LANDING_PAD_THRESHOLD = 0.035 
 
@@ -28,9 +28,9 @@ on_ground = True
 DEFAULT_HEIGHT = 0.4
 height_desired = DEFAULT_HEIGHT
 MAX_FORCE_GOAL = 1.5
-MIN_FORCE_GOAL = 1.0
+MIN_FORCE_GOAL = 1.3
 MIN_DIST_GOAL_FORCE = 0.1
-MAX_SPEED = 0.15
+MAX_SPEED = 0.2
 timer = None
 ctrl_timer = None
 startpos = None
@@ -51,7 +51,7 @@ num_loops_stuck = 0
 prev_command = np.zeros(4)
 k_a = 1.0 # gain attraction force
 k_r = 1.25 # gain repulsive force
-k_s = 0.5 # gain stucknees force
+k_s = 0.0 # gain stucknees force
 cmd_alpha = 0.5
 permanant_obstacles = 0
 first_landpad_location = None
@@ -140,7 +140,8 @@ def render(data):
     return artists.values()
 
 def filter(cmd):
-    return cmd_alpha * np.array(cmd) + (1 - cmd_alpha) * np.array(prev_command)
+    sub_cmd = cmd_alpha * np.array(cmd[:2]) + (1 - cmd_alpha) * np.array(prev_command[:2])
+    return np.concatenate([sub_cmd, cmd[2:]])
 
 # This is the main function where you will implement your control algorithm
 def get_command(sensor_data, camera_data=None, dt=0.1):
@@ -302,11 +303,11 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
                                     landpad_timer += 1.0
                                     print("landing timer: ", landpad_timer)
                                 else:
-                                    print("Going HOME")
+                                    print("Going HOME: ", startpos[:2])
                                     waiting_takeoff = False
                                     control_command = [0.0, 0.0, height_desired, 0.0]
                                     mode = 'find goal'
-                                    goal = startpos[:2] + np.random.normal(0, 0.5, 2)
+                                    goal = startpos[:2]
                                     # reset landing pad locations
                                     first_landpad_location = None
                                     second_landpad_location = None
@@ -327,6 +328,9 @@ def get_command(sensor_data, camera_data=None, dt=0.1):
     if OUTPUT_CMD:
         #print("Cmd: ", control_command)
         print("GOAL ", goal)
+
+    if t % 50 == 0:
+        np.save('cmd_hist', cmd_hist[:t])
 
     if t % PREV_HEIGHT_UPDATE == 0:
         prev_range_down = sensor_data['range_down']
@@ -514,12 +518,12 @@ def assign_goal(sensor_data, map):
                     print("Second edge detected! ", second_landpad_location) 
                     np.save('cmd_hist', cmd_hist[:t])
 
-                    goal[0] = second_landpad_location[0] - 0.1
+                    goal[0] = second_landpad_location[0] - 0.2
                     
                     if dir[1] > 0:
-                            goal[1] = first_landpad_location[1] + 0.1                  
+                            goal[1] = first_landpad_location[1] + 0.15                
                     elif dir[1] < 0:
-                        goal[1] = first_landpad_location[1] - 0.1
+                        goal[1] = first_landpad_location[1] - 0.15
 
                     print("Moving to middle location: ", goal) 
                 return goal
@@ -652,7 +656,7 @@ def compute_repulsive_force(occupancy_map, drone_location):
         # print('Distances: ', distances)
 
         # Delete Obstacles more than N meters away from the drone location
-        N = 0.5
+        N = 0.3
         
         obstacle_locations = obstacle_locations[distances < N]
         directions = directions[distances < N]
@@ -670,8 +674,8 @@ def compute_repulsive_force(occupancy_map, drone_location):
     
     # Calculate the magnitude of the repulsive force
     magnitude = np.linalg.norm(repulsive_force)
-    print("Repulsive force: ", repulsive_force)
-    print('Magnitude: ', magnitude)
+    # print("Repulsive force: ", repulsive_force)
+    # print('Magnitude: ', magnitude)
     
     # Avoid division by zero
     if magnitude == 0: 

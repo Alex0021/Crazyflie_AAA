@@ -6,10 +6,23 @@ import cv2
 
 # Global variables
 on_ground = True
-height_desired = 0.5
+height_desired = 0.4
 timer = None
 startpos = None
 timer_done = None
+control_command = [0.0,0.0,height_desired,0.0]
+prev_command = None
+prev_range_down = None
+goal = None
+going_down = False
+first_landpad_location = None
+second_landpad_location = None
+MAX_SPEED = 0.2
+PREV_HEIGHT_UPDATE = 4
+LANDING_PAD_THRESHOLD = 0.035
+LANDING_PAD_TOUCH_HEIGHT = 0.01
+
+START_POS = [0.0, 1.4]
 
 # Self defined global variables
 setpoint_idx = 0
@@ -131,24 +144,29 @@ setpoint_traj = np.array(
 # "yaw": Yaw angle (rad)
 
 # This is the main function where you will implement your control algorithm
-def get_command(sensor_data, camera_data, dt):
-    global on_ground, startpos, setpoint_idx, setpoint_traj, mode, first_seen
+def get_command(sensor_data):
+    global on_ground, startpos, setpoint_idx, setpoint_traj, mode, first_seen, height_desired, control_command
+    global prev_command, prev_range_down, goal, first_landpad_location, second_landpad_location, going_down
 
     # Take off
     if startpos is None:
-        startpos = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['range_down']]    
-    if on_ground and sensor_data['range_down'] < 0.49:
+        startpos = [START_POS[0], START_POS[1], sensor_data['range_down']]    
+    if on_ground and sensor_data['range_down'] < 0.4:
         control_command = [0.0, 0.0, height_desired, 0.0]
         return control_command
     else:
         on_ground = False
 
+    sensor_data['x_global'] = sensor_data['x_global'] + startpos[0]
+    sensor_data['y_global'] = sensor_data['y_global'] + startpos[1]
+
     # ---- YOUR CODE HERE ----
     map = occupancy_map(sensor_data)
     
     current_setpoint = setpoint_traj[setpoint_idx]
+    drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
 
-    if setpoint_reached(sensor_data, current_setpoint, margin=0.06):
+    if setpoint_reached(sensor_data, current_setpoint, margin=0.1):
          print(f"Setpoint {setpoint_idx} reached!")
          setpoint_idx += 1 
     
@@ -157,33 +175,81 @@ def get_command(sensor_data, camera_data, dt):
         setpoint_idx += 1
 
     # Detection of pad (needs to be changed for the hardware)
-    if mode == 1 and sensor_data['range_down'] < 0.45 and sensor_data['x_global'] > 3.6: 
-        if first_seen == 0:
-            print("Potential landing pad detected")
-            first_seen = sensor_data['t']
-        
-        if sensor_data['t'] - first_seen > 0.2:
-            print("Landing pad detected for more than 0.2s")
-            mode += 1  
-    else:
-        first_seen = 0
+    if mode == 1 and sensor_data['x_global'] > 3.6:
+        edge_detected_bool = edge_detected(sensor_data)
+        if edge_detected_bool and first_landpad_location is None:
+            prev_height = sensor_data['range_down']
+            first_landpad_location = drone_location
+            height_desired = prev_height
+
+            print('First Landing Pad Location Found! ', first_landpad_location)
+
+            dir = current_setpoint[:2] - drone_location
+
+            if dir[1] > 0:
+                goal = drone_location + np.array([0.3, 0.1])
+            else:
+                goal = drone_location + np.array([0.3, -0.1])
+
+            print('Moving to: ', goal)
+        if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
+            if np.linalg.norm(first_landpad_location - drone_location) > 0.05:
+                second_landpad_location = drone_location
+                #height_desired = DEFAULT_HEIGHT
+
+                print("Second edge detected! ", second_landpad_location) 
+
+                goal[0] = second_landpad_location[0] - 0.2
+                
+                if dir[1] > 0:
+                    goal[1] = first_landpad_location[1] + 0.15                
+                elif dir[1] < 0:
+                    goal[1] = first_landpad_location[1] - 0.15
+
+                print("Moving to middle location: ", goal) 
+                mode = 2
+
+        if np.any(first_landpad_location):
+            current_setpoint[:2] = goal
+
+
     
     if mode == 2: # Go down to landing pad
-        current_setpoint = np.array([sensor_data['x_global'],sensor_data['y_global'],0.02])
+        if going_down or setpoint_reached(sensor_data, current_setpoint, with_z=False):
+            going_down = True
+            prev_command[2] -= 0.02    #0.002
+            current_setpoint[2] = prev_command[2]
+            #control_command = [0.0,0.0, -10, 0.0]
+            
+            if sensor_data['range_down'] <  LANDING_PAD_TOUCH_HEIGHT:    #0.02:
+                print("landing pad touched, switch to takeoff")
+                # is_landed = True
+                # waiting_takeoff = True
+                # landpad_timer = 0
+                print('Landed on the Landing Pad. \nGrade Increased to 5.0')
+                mode += 1
+        else:
+            current_setpoint[:2] = goal
     
-    if sensor_data['range_down'] < 0.06 and mode == 2: 
-        mode += 1
+    # if sensor_data['range_down'] < 0.06 and mode == 2: # Landed on pad
+    #     mode += 1
     
     if mode == 3: # Go back to takeoff pad
-        current_setpoint = np.array([startpos[0],startpos[1], 0.5, 0])
+        current_setpoint = np.array([startpos[0],startpos[1], 0.4])
     
-    if mode == 3 and setpoint_reached(sensor_data, current_setpoint):
+    if mode == 3 and setpoint_reached(sensor_data, current_setpoint): # Above takeoff pad
         mode += 1
     
     if mode == 4: # Descend to takeoff pad
         current_setpoint = np.array([startpos[0],startpos[1],0.05])
+
+    prev_command = control_command
+    if t % PREV_HEIGHT_UPDATE == 0:
+        prev_range_down = sensor_data['range_down']
+
     
     control_command = potential_field(map, sensor_data, current_setpoint)
+
     
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
 
@@ -197,6 +263,17 @@ conf = 0.2 # certainty given by each measurement
 t = 0 # only for plotting
 
 map = np.zeros((int((max_x-min_x)/res_pos), int((max_y-min_y)/res_pos))) # 0 = unknown, 1 = free, -1 = occupied
+
+def edge_detected(sensor_data):
+    '''
+    This function checks if the drone is above the landing pad.
+    '''
+    #print(abs(sensor_data['range_down'] - prev_range_down))
+    #print(abs(sensor_data['range_down'] - prev_range_down))
+    if abs(sensor_data['range_down'] - prev_range_down) > LANDING_PAD_THRESHOLD:
+        return True
+    else:
+        return False
 
 def occupancy_map(sensor_data):
     global map, t
@@ -234,11 +311,11 @@ def occupancy_map(sensor_data):
     map = np.clip(map, -1, 1) # certainty can never be more than 100%
 
     # only plot every Nth time step (comment out if not needed)
-    if t % 50 == 0:
-        plt.imshow(np.flip(map,1), vmin=-1, vmax=1, cmap='gray', origin='lower') # flip the map to match the coordinate system
-        plt.savefig("map.png")
-        plt.close()
-    t +=1  
+    # if t % 50 == 0:
+    #     plt.imshow(np.flip(map,1), vmin=-1, vmax=1, cmap='gray', origin='lower') # flip the map to match the coordinate system
+    #     plt.savefig("map.png")
+    #     plt.close()
+    # t +=1  
 
     return map
 
@@ -343,11 +420,27 @@ def potential_field(map, sensor_data, waypoint):
     K_stck = 0.15 #0.3
     
     vel = K_goal*goal_vec_body - K_obst*obstacle_vec_body + K_stck*l
-    yaw_rate = 1.2 #1.2 #1.4 #1.2
+    yaw_rate = 0.2 * 180/np.pi #1.2 #1.4 #1.2
 
     control_command = [vel[0], vel[1], alt, yaw_rate]
 
+    control_command[0], control_command[1] = clip_cmd(control_command, MAX_SPEED)
+
     return control_command
+
+def clip_cmd(cmd, v_max):
+    va, vb = cmd[0], cmd[1]
+    if abs(va) > abs(vb):
+        if abs(va) > v_max:
+            reduction = v_max / abs(va)
+            va *= reduction
+            vb *= reduction
+    if abs(vb) > abs(va):
+        if abs(vb) > v_max:
+            reduction = v_max / abs(vb)
+            va *= reduction
+            vb *= reduction
+    return va, vb
 
 def setpoint_reached(sensor_data, current_setpoint, margin = 0.06, with_z=False):
     pos_x = sensor_data['x_global']
