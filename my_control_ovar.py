@@ -20,10 +20,11 @@ second_landpad_location = None
 dir = None
 MAX_SPEED = 0.2
 PREV_HEIGHT_UPDATE = 4
-LANDING_PAD_THRESHOLD = 0.04
+LANDING_PAD_THRESHOLD = 0.035
 LANDING_PAD_TOUCH_HEIGHT = 0.01
+MIN_LANDPAD_DIST = 0.2
 
-START_POS = [0.0, 1.3]
+START_POS = [0.0, 1.2]
 
 # Self defined global variables
 setpoint_idx = 0
@@ -203,7 +204,7 @@ def get_command(sensor_data):
 
             print('Moving to: ', goal)
         if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
-            if np.linalg.norm(first_landpad_location - drone_location) > 0.1:
+            if np.linalg.norm(first_landpad_location - drone_location) > MIN_LANDPAD_DIST:
                 second_landpad_location = drone_location
                 #height_desired = DEFAULT_HEIGHT
 
@@ -257,7 +258,7 @@ def get_command(sensor_data):
     if mode == 3 and setpoint_reached(sensor_data, current_setpoint):
         if not created_spiral:
             print("Close to home pad: Creating spiral")
-            setpoint_traj = create_spiral(points_in_spiral)
+            setpoint_traj = create_spiral(points_in_spiral, drone_location[:2])
             setpoint_idx = 0
             created_spiral = True
             first_landpad_location = None
@@ -277,14 +278,17 @@ def get_command(sensor_data):
 
             dir = current_setpoint[:2] - drone_location
 
-            if dir[1] > 0:
-                goal = drone_location + np.array([0.3, 0.1])
-            else:
-                goal = drone_location + np.array([0.3, -0.1])
+            # if dir[1] > 0:
+            #     goal = drone_location + np.array([0.3, 0.1])
+            # else:
+            #     goal = drone_location + np.array([0.3, -0.1])
 
+            mode = 5
+            goal[:2] = drone_location + 0.1*dir
+            goal[1] += 0.2
             print('Moving to: ', goal)
         if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
-            if np.linalg.norm(first_landpad_location - drone_location) > 0.15:
+            if np.linalg.norm(first_landpad_location - drone_location) > MIN_LANDPAD_DIST:
                 second_landpad_location = drone_location
                 #height_desired = DEFAULT_HEIGHT
 
@@ -418,7 +422,7 @@ def obstacle_field(map, sensor_data, goal_vec):
     d_min1 = d_min2 = np.inf
 
     # Maximum distance in which drone is being reppeld from obstacels
-    max_obs_dist = 0.4 # 0.3
+    max_obs_dist = 0.35 # 0.3
     # If the angle beteween vec_min1 and vec is greater than "angle_thresh" then vec_min2 = vec
     angle_thresh = np.pi/3
     
@@ -444,24 +448,24 @@ def obstacle_field(map, sensor_data, goal_vec):
     # Add the repultion force together In the case of closeby obstacels from multiple angles
     v = vec_min1 + vec_min2                         
                      
-    if t % 10 == 0:
-        w,h = map.shape
-        map = map.astype(np.uint8)*255
-        scale = 10
-        map = cv2.resize(map, dsize=(h*scale,w*scale), interpolation=cv2.INTER_NEAREST)
-        obs_vec = (v*scale/res_pos).astype(int)
-        obs_vec1 = (vec_min1*scale/res_pos).astype(int)
-        obs_vec2 = (vec_min2*scale/res_pos).astype(int)
-        goal_vec = (goal_vec*scale/res_pos).astype(int)
-        pos_vec = np.array([pos_x*scale/res_pos, pos_y*scale/res_pos], dtype=int)
+    # if t % 10 == 0:
+    #     w,h = map.shape
+    #     map = map.astype(np.uint8)*255
+    #     scale = 10
+    #     map = cv2.resize(map, dsize=(h*scale,w*scale), interpolation=cv2.INTER_NEAREST)
+    #     obs_vec = (v*scale/res_pos).astype(int)
+    #     obs_vec1 = (vec_min1*scale/res_pos).astype(int)
+    #     obs_vec2 = (vec_min2*scale/res_pos).astype(int)
+    #     goal_vec = (goal_vec*scale/res_pos).astype(int)
+    #     pos_vec = np.array([pos_x*scale/res_pos, pos_y*scale/res_pos], dtype=int)
         
-        map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] - obs_vec1[1], pos_vec[0] - obs_vec1[0]), (160,0,0), 2)
-        map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] - obs_vec2[1], pos_vec[0] - obs_vec2[0]), (160,0,0), 2)
-        map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] - obs_vec[1], pos_vec[0] - obs_vec[0]) , (255,0,0), 2)
-        map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] + goal_vec[1], pos_vec[0] + goal_vec[0]) , (255,0,0), 2)
+    #     map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] - obs_vec1[1], pos_vec[0] - obs_vec1[0]), (160,0,0), 2)
+    #     map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] - obs_vec2[1], pos_vec[0] - obs_vec2[0]), (160,0,0), 2)
+    #     map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] - obs_vec[1], pos_vec[0] - obs_vec[0]) , (255,0,0), 2)
+    #     map = cv2.arrowedLine(map, (pos_vec[1], pos_vec[0]), (pos_vec[1] + goal_vec[1], pos_vec[0] + goal_vec[0]) , (255,0,0), 2)
 
-        cv2.imshow('Obstacles avoidance', map)
-        cv2.waitKey(1)    
+    #     cv2.imshow('Obstacles avoidance', map)
+    #     cv2.waitKey(1)    
     
     return v
 
@@ -502,7 +506,7 @@ def potential_field(map, sensor_data, waypoint, with_alt=True, speed=MAX_SPEED):
     K_stck = 0.15 #0.3
     
     vel = K_goal*goal_vec_body - K_obst*obstacle_vec_body + K_stck*l
-    yaw_rate = 0.2 * 180/np.pi #1.2 #1.4 #1.2
+    yaw_rate = 0.25 * 180/np.pi #1.2 #1.4 #1.2
 
     control_command = [vel[0], vel[1], alt, yaw_rate]
 
