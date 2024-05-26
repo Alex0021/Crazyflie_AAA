@@ -8,14 +8,14 @@ import math
 import matplotlib.pyplot as plt
 
 import cflib.crtp 
-from cflib.crazyflie import Crazyflie
+from cflib.crazyflie import Crazyflie 
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils import uri_helper
 from cflib.crazyflie.log import LogConfig
- 
+  
 
-URI = uri_helper.uri_from_env(default="radio://0/40/2M/E7E7E7E704")
+URI = uri_helper.uri_from_env(default="radio://0/80/2M/E7E7E7E701")
 
 BASE_VEL = 0.3
 DESIRED_HEIGHT = 0.5
@@ -33,7 +33,7 @@ class KeyboardController:
         self._cf.connection_lost.add_callback(self._connection_lost)
 
         self.in_air = False
-        self.is_ready = False
+        self.is_ready = False 
         self.force_landing = False
         self.print_data = 0
 
@@ -57,13 +57,13 @@ class KeyboardController:
         self._lg_stab = LogConfig(name='Stabilizer', period_in_ms=50)
         self._lg_stab.add_variable('stateEstimate.x', 'float')
         self._lg_stab.add_variable('stateEstimate.y', 'float')
-        self._lg_stab.add_variable('stateEstimate.z', 'float')
+        self._lg_stab.add_variable('stateEstimate.z' , 'float')
         self._lg_stab.add_variable('stabilizer.yaw', 'float')
         self._lg_stab.add_variable('range.front')
         self._lg_stab.add_variable('range.back')
         self._lg_stab.add_variable('range.left')
         self._lg_stab.add_variable('range.right')
-        self._lg_stab.add_variable('range.zrange')
+        self._lg_stab.add_variable('range.zrange') 
         try:
             self._cf.log.add_config(self._lg_stab)
             # This callback will receive the data
@@ -136,7 +136,7 @@ class KeyboardController:
 
 
     def _on_key_pressed(self, key):
-        if not self.is_ready:
+        if not self.is_ready: 
             return
         if key == keyboard.Key.space:
             self._force_landing()
@@ -153,7 +153,7 @@ class KeyboardController:
             time.sleep(0.1)
         time.sleep(0.5)
         self.is_ready = False
-        self._cf.commander.send_stop_setpoint()
+        self._cf.commander.send_stop_setpoint() 
         self._cf.close_link()
 
     def _handle_spacebar(self):

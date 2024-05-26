@@ -17,12 +17,13 @@ goal = None
 going_down = False
 first_landpad_location = None
 second_landpad_location = None
+dir = None
 MAX_SPEED = 0.2
 PREV_HEIGHT_UPDATE = 4
-LANDING_PAD_THRESHOLD = 0.035
+LANDING_PAD_THRESHOLD = 0.04
 LANDING_PAD_TOUCH_HEIGHT = 0.01
 
-START_POS = [0.0, 1.4]
+START_POS = [0.0, 1.3]
 
 # Self defined global variables
 setpoint_idx = 0
@@ -30,107 +31,108 @@ mode = 1
 first_seen = 0
 points_in_spiral = 50
 created_spiral = False
+t = 0
 
 setpoint_traj = np.array(
-[[3.5, 1.5, 0.5],
- [3.67, 2.80, 0.5],
- [3.67, 2.60, 0.5],
- [3.67, 2.40, 0.5],
- [3.67, 2.20, 0.5],
- [3.67, 2.00, 0.5],
- [3.67, 1.80, 0.5],
- [3.67, 1.60, 0.5],
- [3.67, 1.40, 0.5],
- [3.67, 1.20, 0.5],
- [3.67, 1.00, 0.5],
- [3.67, 0.80, 0.5],
- [3.67, 0.60, 0.5],
- [3.67, 0.40, 0.5],
- [3.67, 0.20, 0.5],
- [3.88, 0.20, 0.5],
- [3.88, 0.40, 0.5],
- [3.88, 0.60, 0.5],
- [3.88, 0.80, 0.5],
- [3.88, 1.00, 0.5],
- [3.88, 1.20, 0.5],
- [3.88, 1.40, 0.5],
- [3.88, 1.60, 0.5],
- [3.88, 1.80, 0.5],
- [3.88, 2.00, 0.5],
- [3.88, 2.20, 0.5],
- [3.88, 2.40, 0.5],
- [3.88, 2.60, 0.5],
- [3.88, 2.80, 0.5],
- [4.06, 2.80, 0.5],
- [4.06, 2.60, 0.5],
- [4.06, 2.40, 0.5],
- [4.06, 2.20, 0.5],
- [4.06, 2.00, 0.5],
- [4.06, 1.80, 0.5],
- [4.06, 1.60, 0.5],
- [4.06, 1.40, 0.5],
- [4.06, 1.20, 0.5],
- [4.06, 1.00, 0.5],
- [4.06, 0.80, 0.5],
- [4.06, 0.60, 0.5],
- [4.06, 0.40, 0.5],
- [4.06, 0.20, 0.5],
- [4.26, 0.20, 0.5],
- [4.26, 0.40, 0.5],
- [4.26, 0.60, 0.5],
- [4.26, 0.80, 0.5],
- [4.26, 1.00, 0.5],
- [4.26, 1.20, 0.5],
- [4.26, 1.40, 0.5],
- [4.26, 1.60, 0.5],
- [4.26, 1.80, 0.5],
- [4.26, 2.00, 0.5],
- [4.26, 2.20, 0.5],
- [4.26, 2.40, 0.5],
- [4.26, 2.60, 0.5],
- [4.26, 2.80, 0.5],
- [4.44, 2.80, 0.5],
- [4.44, 2.60, 0.5],
- [4.44, 2.40, 0.5],
- [4.44, 2.20, 0.5],
- [4.44, 2.00, 0.5],
- [4.44, 1.80, 0.5],
- [4.44, 1.60, 0.5],
- [4.44, 1.40, 0.5],
- [4.44, 1.20, 0.5],
- [4.44, 1.00, 0.5],
- [4.44, 0.80, 0.5],
- [4.44, 0.60, 0.5],
- [4.44, 0.40, 0.5],
- [4.44, 0.20, 0.5],
- [4.62, 0.20, 0.5],
- [4.62, 0.40, 0.5],
- [4.62, 0.60, 0.5],
- [4.62, 0.80, 0.5],
- [4.62, 1.00, 0.5],
- [4.62, 1.20, 0.5],
- [4.62, 1.40, 0.5],
- [4.62, 1.60, 0.5],
- [4.62, 1.80, 0.5],
- [4.62, 2.00, 0.5],
- [4.62, 2.20, 0.5],
- [4.62, 2.40, 0.5],
- [4.62, 2.60, 0.5],
- [4.62, 2.80, 0.5],
- [4.82, 2.80, 0.5],
- [4.82, 2.60, 0.5],
- [4.82, 2.40, 0.5],
- [4.82, 2.20, 0.5],
- [4.82, 2.00, 0.5],
- [4.82, 1.80, 0.5],
- [4.82, 1.60, 0.5],
- [4.82, 1.40, 0.5],
- [4.82, 1.20, 0.5],
- [4.82, 1.00, 0.5],
- [4.82, 0.80, 0.5],
- [4.82, 0.60, 0.5],
- [4.82, 0.40, 0.5],
- [4.82, 0.20, 0.5]])
+[[3.5, 1.5, height_desired],
+ [3.67, 2.80, height_desired],
+ [3.67, 2.60, height_desired],
+ [3.67, 2.40, height_desired],
+ [3.67, 2.20, height_desired],
+ [3.67, 2.00, height_desired],
+ [3.67, 1.80, height_desired],
+ [3.67, 1.60, height_desired],
+ [3.67, 1.40, height_desired],
+ [3.67, 1.20, height_desired],
+ [3.67, 1.00, height_desired],
+ [3.67, 0.80, height_desired],
+ [3.67, 0.60, height_desired],
+ [3.67, 0.40, height_desired],
+ [3.67, 0.20, height_desired],
+ [3.88, 0.20, height_desired],
+ [3.88, 0.40, height_desired],
+ [3.88, 0.60, height_desired],
+ [3.88, 0.80, height_desired],
+ [3.88, 1.00, height_desired],
+ [3.88, 1.20, height_desired],
+ [3.88, 1.40, height_desired],
+ [3.88, 1.60, height_desired],
+ [3.88, 1.80, height_desired],
+ [3.88, 2.00, height_desired],
+ [3.88, 2.20, height_desired],
+ [3.88, 2.40, height_desired],
+ [3.88, 2.60, height_desired],
+ [3.88, 2.80, height_desired],
+ [4.06, 2.80, height_desired],
+ [4.06, 2.60, height_desired],
+ [4.06, 2.40, height_desired],
+ [4.06, 2.20, height_desired],
+ [4.06, 2.00, height_desired],
+ [4.06, 1.80, height_desired],
+ [4.06, 1.60, height_desired],
+ [4.06, 1.40, height_desired],
+ [4.06, 1.20, height_desired],
+ [4.06, 1.00, height_desired],
+ [4.06, 0.80, height_desired],
+ [4.06, 0.60, height_desired],
+ [4.06, 0.40, height_desired],
+ [4.06, 0.20, height_desired],
+ [4.26, 0.20, height_desired],
+ [4.26, 0.40, height_desired],
+ [4.26, 0.60, height_desired],
+ [4.26, 0.80, height_desired],
+ [4.26, 1.00, height_desired],
+ [4.26, 1.20, height_desired],
+ [4.26, 1.40, height_desired],
+ [4.26, 1.60, height_desired],
+ [4.26, 1.80, height_desired],
+ [4.26, 2.00, height_desired],
+ [4.26, 2.20, height_desired],
+ [4.26, 2.40, height_desired],
+ [4.26, 2.60, height_desired],
+ [4.26, 2.80, height_desired],
+ [4.44, 2.80, height_desired],
+ [4.44, 2.60, height_desired],
+ [4.44, 2.40, height_desired],
+ [4.44, 2.20, height_desired],
+ [4.44, 2.00, height_desired],
+ [4.44, 1.80, height_desired],
+ [4.44, 1.60, height_desired],
+ [4.44, 1.40, height_desired],
+ [4.44, 1.20, height_desired],
+ [4.44, 1.00, height_desired],
+ [4.44, 0.80, height_desired],
+ [4.44, 0.60, height_desired],
+ [4.44, 0.40, height_desired],
+ [4.44, 0.20, height_desired],
+ [4.62, 0.20, height_desired],
+ [4.62, 0.40, height_desired],
+ [4.62, 0.60, height_desired],
+ [4.62, 0.80, height_desired],
+ [4.62, 1.00, height_desired],
+ [4.62, 1.20, height_desired],
+ [4.62, 1.40, height_desired],
+ [4.62, 1.60, height_desired],
+ [4.62, 1.80, height_desired],
+ [4.62, 2.00, height_desired],
+ [4.62, 2.20, height_desired],
+ [4.62, 2.40, height_desired],
+ [4.62, 2.60, height_desired],
+ [4.62, 2.80, height_desired],
+ [4.82, 2.80, height_desired],
+ [4.82, 2.60, height_desired],
+ [4.82, 2.40, height_desired],
+ [4.82, 2.20, height_desired],
+ [4.82, 2.00, height_desired],
+ [4.82, 1.80, height_desired],
+ [4.82, 1.60, height_desired],
+ [4.82, 1.40, height_desired],
+ [4.82, 1.20, height_desired],
+ [4.82, 1.00, height_desired],
+ [4.82, 0.80, height_desired],
+ [4.82, 0.60, height_desired],
+ [4.82, 0.40, height_desired],
+ [4.82, 0.20, height_desired]])
 
 # The available ground truth state measurements can be accessed by calling sensor_data[item]. All values of "item" are provided as defined in main.py lines 296-323. 
 # The "item" values that you can later use in the hardware project are:
@@ -147,8 +149,8 @@ setpoint_traj = np.array(
 
 # This is the main function where you will implement your control algorithm
 def get_command(sensor_data):
-    global on_ground, startpos, setpoint_idx, setpoint_traj, mode, first_seen, height_desired, control_command
-    global prev_command, prev_range_down, goal, first_landpad_location, second_landpad_location, going_down
+    global on_ground, startpos, setpoint_idx, setpoint_traj, mode, first_seen, height_desired, control_command, created_spiral
+    global prev_command, prev_range_down, goal, first_landpad_location, second_landpad_location, going_down, t, dir
 
 
     # Take off
@@ -166,14 +168,19 @@ def get_command(sensor_data):
     # ---- YOUR CODE HERE ----
     map = occupancy_map(sensor_data)
     
-    current_setpoint = setpoint_traj[setpoint_idx]
+    try:
+        current_setpoint = setpoint_traj[setpoint_idx]
+    except:
+        return [0.0, 0.0, -10, 0.0]
     drone_location = np.array([sensor_data['x_global'], sensor_data['y_global']])
+    #print("Drone location: ", drone_location)
+    control_command = potential_field(map, sensor_data, current_setpoint)
 
-    if setpoint_reached(sensor_data, current_setpoint, margin=0.1):
+    if setpoint_reached(sensor_data, current_setpoint, margin=0.1) and first_landpad_location is None:
          print(f"Setpoint {setpoint_idx} reached!")
          setpoint_idx += 1 
     
-    if waypoint_obstructed(current_setpoint, map, margin=0.3):
+    if waypoint_obstructed(current_setpoint, map, margin=0.3) and first_landpad_location is None:
         print(f"Deleted setpoint: {setpoint_idx}")
         setpoint_idx += 1
 
@@ -196,13 +203,13 @@ def get_command(sensor_data):
 
             print('Moving to: ', goal)
         if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
-            if np.linalg.norm(first_landpad_location - drone_location) > 0.05:
+            if np.linalg.norm(first_landpad_location - drone_location) > 0.1:
                 second_landpad_location = drone_location
                 #height_desired = DEFAULT_HEIGHT
 
                 print("Second edge detected! ", second_landpad_location) 
 
-                goal[0] = second_landpad_location[0] - 0.2
+                goal[0] = second_landpad_location[0] - 0.25
                 
                 if dir[1] > 0:
                     goal[1] = first_landpad_location[1] + 0.15                
@@ -215,17 +222,21 @@ def get_command(sensor_data):
         if np.any(first_landpad_location):
             current_setpoint[:2] = goal
 
+        control_command = potential_field(map, sensor_data, current_setpoint, with_alt=False)
+
 
     
     if mode == 2: # Go down to landing pad
-        if going_down or setpoint_reached(sensor_data, current_setpoint, with_z=False):
+        if going_down or setpoint_reached(sensor_data, current_setpoint):
             going_down = True
             prev_command[2] -= 0.02    #0.002
-            current_setpoint[2] = prev_command[2]
+            #current_setpoint[2] = prev_command[2]
             #control_command = [0.0,0.0, -10, 0.0]
+            control_command = [0.0, 0.0, prev_command[2], 0.0]
             
             if sensor_data['range_down'] <  LANDING_PAD_TOUCH_HEIGHT:    #0.02:
                 print("landing pad touched, switch to takeoff")
+                control_command = [0.0, 0.0, 0.0, 0.0]
                 # is_landed = True
                 # waiting_takeoff = True
                 # landpad_timer = 0
@@ -233,29 +244,89 @@ def get_command(sensor_data):
                 mode += 1
         else:
             current_setpoint[:2] = goal
+            control_command = potential_field(map, sensor_data, current_setpoint, with_alt=False)
     
     # if sensor_data['range_down'] < 0.06 and mode == 2: # Landed on pad
     #     mode += 1
     
     if mode == 3: # Go back to takeoff pad
         current_setpoint = np.array([startpos[0],startpos[1], 0.4])
+        control_command = potential_field(map, sensor_data, current_setpoint)
     
 
     if mode == 3 and setpoint_reached(sensor_data, current_setpoint):
         if not created_spiral:
+            print("Close to home pad: Creating spiral")
             setpoint_traj = create_spiral(points_in_spiral)
+            setpoint_idx = 0
             created_spiral = True
+            first_landpad_location = None
+            second_landpad_location = None
+            going_down = False
         mode += 1
+        control_command = potential_field(map, sensor_data, current_setpoint)
     
-    if mode == 4: # Descend to takeoff pad
-        current_setpoint = np.array([startpos[0],startpos[1],0.05])
+    if mode == 4: #
+        edge_detected_bool = edge_detected(sensor_data)
+        if edge_detected_bool and first_landpad_location is None:
+            prev_height = sensor_data['range_down']
+            first_landpad_location = drone_location
+            height_desired = prev_height
+
+            print('First Landing Pad Location Found! ', first_landpad_location)
+
+            dir = current_setpoint[:2] - drone_location
+
+            if dir[1] > 0:
+                goal = drone_location + np.array([0.3, 0.1])
+            else:
+                goal = drone_location + np.array([0.3, -0.1])
+
+            print('Moving to: ', goal)
+        if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
+            if np.linalg.norm(first_landpad_location - drone_location) > 0.1:
+                second_landpad_location = drone_location
+                #height_desired = DEFAULT_HEIGHT
+
+                print("Second edge detected! ", second_landpad_location) 
+
+                goal[0] = second_landpad_location[0] - 0.25
+                
+                if dir[1] > 0:
+                    goal[1] = first_landpad_location[1] + 0.15                
+                elif dir[1] < 0:
+                    goal[1] = first_landpad_location[1] - 0.15
+
+                print("Moving to middle location: ", goal) 
+                mode = 5
+        control_command = potential_field(map, sensor_data, current_setpoint)
+
+    if mode == 5: # Descend to takeoff pad
+        if going_down or setpoint_reached(sensor_data, current_setpoint):
+            going_down = True
+            prev_command[2] -= 0.02    #0.002
+            #current_setpoint[2] = prev_command[2]
+            #control_command = [0.0,0.0, -10, 0.0]
+            control_command = [0.0, 0.0, prev_command[2], 0.0]
+            
+            if sensor_data['range_down'] <  LANDING_PAD_TOUCH_HEIGHT:    #0.02:
+                print("landing pad touched, switch to takeoff")
+                control_command = [0.0, 0.0, -10, 0.0]
+                # is_landed = True
+                # waiting_takeoff = True
+                # landpad_timer = 0
+                print("FUCK YES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                return control_command
+        else:
+            current_setpoint[:2] = goal
+            control_command = potential_field(map, sensor_data, current_setpoint, with_alt=False)
 
     prev_command = control_command
+    #print("command: ", control_command)
     if t % PREV_HEIGHT_UPDATE == 0:
         prev_range_down = sensor_data['range_down']
 
-    
-    control_command = potential_field(map, sensor_data, current_setpoint)
+    t += 1
 
     
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
@@ -402,7 +473,8 @@ def goal_field(pos_goal, sensor_data):
     return vec
 
 
-def potential_field(map, sensor_data, waypoint):
+def potential_field(map, sensor_data, waypoint, with_alt=True, speed=MAX_SPEED):
+    global height_desired
     
     map = map.copy()
     yaw = sensor_data['yaw']
@@ -420,7 +492,10 @@ def potential_field(map, sensor_data, waypoint):
     l = stuckness_avoidance(goal_vec_body, goal_vec_world, obstacle_vec_world)
    
     # Avoid to abrupt altitude changes
-    alt = alltitude_controller(sensor_data, waypoint, alt_error_thresh = 0.1) #
+    if with_alt:
+        alt = alltitude_controller(sensor_data, waypoint, alt_error_thresh = 0.2) #
+    else:
+        alt = height_desired
     
     K_goal = 0.3 
     K_obst = 2
@@ -431,7 +506,7 @@ def potential_field(map, sensor_data, waypoint):
 
     control_command = [vel[0], vel[1], alt, yaw_rate]
 
-    control_command[0], control_command[1] = clip_cmd(control_command, MAX_SPEED)
+    control_command[0], control_command[1] = clip_cmd(control_command, speed)
 
     return control_command
 
@@ -545,6 +620,7 @@ def create_spiral(points_in_spiral):
     for i in range(points_in_spiral):
         myPoints.append(spiral(i))
     myPoints = delete_points(myPoints)
+    myPoints = np.concatenate([myPoints, height_desired*np.ones((len(myPoints),1))], axis=1)
     return myPoints
 
 
