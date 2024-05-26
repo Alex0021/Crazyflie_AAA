@@ -22,7 +22,7 @@ MAX_SPEED = 0.2
 PREV_HEIGHT_UPDATE = 4
 LANDING_PAD_THRESHOLD = 0.035
 LANDING_PAD_TOUCH_HEIGHT = 0.01
-MIN_LANDPAD_DIST = 0.2
+MIN_LANDPAD_DIST = 0.1
 
 START_POS = [0.0, 1.2]
 
@@ -137,7 +137,7 @@ setpoint_traj = np.array(
 
 # Points on opposite side of map (subtract smallest value on x-axis)
 # Points on opposite side of map (subtract smallest value on x-axis)
-setpoint_traj2 = [setpoint_traj[:,0]-3.5,setpoint_traj[:,1],setpoint_traj[:,2]]
+setpoint_traj2 = [setpoint_traj[:,0]-4.8 + START_POS[0] + 0.3,setpoint_traj[:,1],setpoint_traj[:,2]]
 setpoint_traj2 = np.array(setpoint_traj2).T
 print(setpoint_traj2)
 
@@ -157,7 +157,7 @@ print(setpoint_traj2)
 # This is the main function where you will implement your control algorithm
 def get_command(sensor_data):
     global on_ground, startpos, setpoint_idx, setpoint_traj, mode, first_seen, height_desired, control_command, created_spiral
-    global prev_command, prev_range_down, goal, first_landpad_location, second_landpad_location, going_down, t, dir
+    global prev_command, prev_range_down, goal, first_landpad_location, second_landpad_location, going_down, t, dir, start
 
 
     # Take off
@@ -185,11 +185,17 @@ def get_command(sensor_data):
 
     if setpoint_reached(sensor_data, current_setpoint, margin=0.1) and first_landpad_location is None:
          print(f"Setpoint {setpoint_idx} reached!")
-         setpoint_idx += 1 
+         if mode < 3:
+            setpoint_idx += 1 
+         else:
+            setpoint_idx -= 1
     
     if waypoint_obstructed(current_setpoint, map, margin=0.3) and first_landpad_location is None:
         print(f"Deleted setpoint: {setpoint_idx}")
-        setpoint_idx += 1
+        if mode < 3:
+            setpoint_idx += 1
+        else:
+            setpoint_idx -= 1
 
     # Detection of pad (needs to be changed for the hardware)
     if mode == 1 and sensor_data['x_global'] > 3.6:
@@ -197,7 +203,7 @@ def get_command(sensor_data):
         if edge_detected_bool and first_landpad_location is None:
             prev_height = sensor_data['range_down']
             first_landpad_location = drone_location
-            height_desired = prev_height
+            #height_desired = prev_height
 
             print('First Landing Pad Location Found! ', first_landpad_location)
 
@@ -210,18 +216,18 @@ def get_command(sensor_data):
 
             print('Moving to: ', goal)
         if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
-            if np.linalg.norm(first_landpad_location - drone_location) > MIN_LANDPAD_DIST:
+            if np.all(np.abs(first_landpad_location - drone_location) > MIN_LANDPAD_DIST):
                 second_landpad_location = drone_location
                 #height_desired = DEFAULT_HEIGHT
 
                 print("Second edge detected! ", second_landpad_location) 
 
-                goal[0] = second_landpad_location[0] - 0.25
+                goal[0] = second_landpad_location[0] - 0.2
                 
                 if dir[1] > 0:
-                    goal[1] = first_landpad_location[1] + 0.15                
+                    goal[1] = first_landpad_location[1] + 0.1              
                 elif dir[1] < 0:
-                    goal[1] = first_landpad_location[1] - 0.15
+                    goal[1] = first_landpad_location[1] - 0.1
 
                 print("Moving to middle location: ", goal) 
                 mode = 2
@@ -261,11 +267,11 @@ def get_command(sensor_data):
         control_command = potential_field(map, sensor_data, current_setpoint)
     
 
-    if mode == 3 and setpoint_reached(sensor_data, current_setpoint):
+    if mode == 3 and drone_location[0] < startpos[0] + 0.3:
         if not created_spiral:
             print("Close to home pad: Creating spiral")
             setpoint_traj = setpoint_traj2
-            setpoint_idx = 0
+            setpoint_idx = len(setpoint_traj) - 1
             created_spiral = True
             first_landpad_location = None
             second_landpad_location = None
@@ -276,6 +282,8 @@ def get_command(sensor_data):
     if mode == 4: #
         edge_detected_bool = edge_detected(sensor_data)
         if edge_detected_bool and first_landpad_location is None:
+            # Start a timer for 4 seconds
+            start = time.time()
             prev_height = sensor_data['range_down']
             first_landpad_location = drone_location
             height_desired = prev_height
@@ -284,31 +292,43 @@ def get_command(sensor_data):
 
             dir = current_setpoint[:2] - drone_location
 
-            # if dir[1] > 0:
-            #     goal = drone_location + np.array([0.3, 0.1])
-            # else:
-            #     goal = drone_location + np.array([0.3, -0.1])
+            if dir[1] > 0:
+                goal = drone_location + np.array([-0.5, 0.1])
+            else:
+                goal = drone_location + np.array([-0.5, -0.1])
 
-            mode = 5
-            goal[:2] = drone_location + 0.1*dir
-            goal[1] += 0.2
+            # mode = 5
+            # goal[:2] = drone_location + 0.1*dir
+            # goal[1] += 0.2
             print('Moving to: ', goal)
+
+        # If second pad not found in 4 seconds, continue searching
+        if time.time() - start > 4:
+            first_landpad_location = None
+            print("First pad not found in 4 seconds, continue searching")
+            start = 0.0
+            
         if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
-            if np.linalg.norm(first_landpad_location - drone_location) > MIN_LANDPAD_DIST:
+            
+            if np.all(np.abs(first_landpad_location - drone_location) > MIN_LANDPAD_DIST):
                 second_landpad_location = drone_location
                 #height_desired = DEFAULT_HEIGHT
 
                 print("Second edge detected! ", second_landpad_location) 
 
-                goal[0] = second_landpad_location[0] - 0.25
+                goal[0] = second_landpad_location[0] + 0.2
                 
                 if dir[1] > 0:
-                    goal[1] = first_landpad_location[1] + 0.15                
+                    goal[1] = first_landpad_location[1] + 0.1            
                 elif dir[1] < 0:
-                    goal[1] = first_landpad_location[1] - 0.15
+                    goal[1] = first_landpad_location[1] - 0.1
 
                 print("Moving to middle location: ", goal) 
                 mode = 5
+
+            if np.any(first_landpad_location):
+                current_setpoint[:2] = goal
+
         control_command = potential_field(map, sensor_data, current_setpoint)
 
     if mode == 5: # Descend to takeoff pad
