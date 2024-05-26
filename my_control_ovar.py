@@ -28,6 +28,8 @@ START_POS = [0.0, 1.4]
 setpoint_idx = 0
 mode = 1 
 first_seen = 0
+points_in_spiral = 50
+created_spiral = False
 
 setpoint_traj = np.array(
 [[3.5, 1.5, 0.5],
@@ -148,6 +150,7 @@ def get_command(sensor_data):
     global on_ground, startpos, setpoint_idx, setpoint_traj, mode, first_seen, height_desired, control_command
     global prev_command, prev_range_down, goal, first_landpad_location, second_landpad_location, going_down
 
+
     # Take off
     if startpos is None:
         startpos = [START_POS[0], START_POS[1], sensor_data['range_down']]    
@@ -237,7 +240,11 @@ def get_command(sensor_data):
     if mode == 3: # Go back to takeoff pad
         current_setpoint = np.array([startpos[0],startpos[1], 0.4])
     
-    if mode == 3 and setpoint_reached(sensor_data, current_setpoint): # Above takeoff pad
+
+    if mode == 3 and setpoint_reached(sensor_data, current_setpoint):
+        if not created_spiral:
+            setpoint_traj = create_spiral(points_in_spiral)
+            created_spiral = True
         mode += 1
     
     if mode == 4: # Descend to takeoff pad
@@ -501,6 +508,45 @@ def alltitude_controller(sensor_data, waypoint, alt_error_thresh=0.3):
 
 
 # HELPERS:
+def spiral(n):
+    n+=1 # Start counting qt 0. Adapting from matlab to Python
+    k=np.ceil((np.sqrt(n)-1)/2)
+    t=2*k+1
+    m=t**2 
+    t=t-1
+    if n>=m-t:
+        return k-(m-n),-k        
+    else :
+        m=m-t
+    if n>=m-t:
+        return -k,-k+(m-n)
+    else:
+        m=m-t
+    if n>=m-t:
+        return -k+(m-n),k 
+    else:
+        return k,k-(m-n-t)
+
+def delete_points(points):
+    to_keep = []
+    to_keep.append(points[0])
+    for i in range(1, len(points)-1):
+        if points[i][0] == points[i-1][0] and points[i][0] == points[i+1][0]:
+            pass
+        elif points[i][1] == points[i-1][1] and points[i][1] == points[i+1][1]:
+            pass
+        else:
+            to_keep.append(points[i])
+
+    return to_keep
+
+def create_spiral(points_in_spiral):
+    myPoints = []
+    for i in range(points_in_spiral):
+        myPoints.append(spiral(i))
+    myPoints = delete_points(myPoints)
+    return myPoints
+
 
 def normalize_vector(v, threshold=1e-1):
     norm = np.linalg.norm(v)
