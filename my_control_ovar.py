@@ -23,6 +23,9 @@ PREV_HEIGHT_UPDATE = 4
 LANDING_PAD_THRESHOLD = 0.035
 LANDING_PAD_TOUCH_HEIGHT = 0.01
 MIN_LANDPAD_DIST = 0.1
+LANDPAD_TARGET_TOL = 0.01
+LANDPAD_ADJ_X = 0.2
+LANDPAD_ADJ_Y = 0.1
 
 START_POS = [0.0, 1.2]
 
@@ -210,9 +213,9 @@ def get_command(sensor_data):
             dir = current_setpoint[:2] - drone_location
 
             if dir[1] > 0:
-                goal = drone_location + np.array([0.3, 0.1])
+                goal = drone_location + np.array([0.4, 0.1])
             else:
-                goal = drone_location + np.array([0.3, -0.1])
+                goal = drone_location + np.array([0.4, -0.1])
 
             print('Moving to: ', goal)
         if edge_detected_bool and np.any(first_landpad_location) and second_landpad_location is None:
@@ -222,12 +225,12 @@ def get_command(sensor_data):
 
                 print("Second edge detected! ", second_landpad_location) 
 
-                goal[0] = second_landpad_location[0] - 0.2
+                goal[0] = second_landpad_location[0] - LANDPAD_ADJ_X
                 
                 if dir[1] > 0:
-                    goal[1] = first_landpad_location[1] + 0.1              
+                    goal[1] = first_landpad_location[1] + LANDPAD_ADJ_Y            
                 elif dir[1] < 0:
-                    goal[1] = first_landpad_location[1] - 0.1
+                    goal[1] = first_landpad_location[1] - LANDPAD_ADJ_Y
 
                 print("Moving to middle location: ", goal) 
                 mode = 2
@@ -240,7 +243,7 @@ def get_command(sensor_data):
 
     
     if mode == 2: # Go down to landing pad
-        if going_down or setpoint_reached(sensor_data, current_setpoint):
+        if going_down or setpoint_reached(sensor_data, current_setpoint, margin=LANDPAD_TARGET_TOL):
             going_down = True
             prev_command[2] -= 0.02    #0.002
             #current_setpoint[2] = prev_command[2]
@@ -293,9 +296,9 @@ def get_command(sensor_data):
             dir = current_setpoint[:2] - drone_location
 
             if dir[1] > 0:
-                goal = drone_location + np.array([-0.5, 0.1])
+                goal = drone_location + np.array([-0.4, 0.1])
             else:
-                goal = drone_location + np.array([-0.5, -0.1])
+                goal = drone_location + np.array([-0.4, -0.1])
 
             # mode = 5
             # goal[:2] = drone_location + 0.1*dir
@@ -316,12 +319,12 @@ def get_command(sensor_data):
 
                 print("Second edge detected! ", second_landpad_location) 
 
-                goal[0] = second_landpad_location[0] + 0.2
+                goal[0] = second_landpad_location[0] + LANDPAD_ADJ_X
                 
                 if dir[1] > 0:
-                    goal[1] = first_landpad_location[1] + 0.1            
+                    goal[1] = first_landpad_location[1] + LANDPAD_ADJ_Y          
                 elif dir[1] < 0:
-                    goal[1] = first_landpad_location[1] - 0.1
+                    goal[1] = first_landpad_location[1] - LANDPAD_ADJ_Y
 
                 print("Moving to middle location: ", goal) 
                 mode = 5
@@ -332,7 +335,7 @@ def get_command(sensor_data):
         control_command = potential_field(map, sensor_data, current_setpoint)
 
     if mode == 5: # Descend to takeoff pad
-        if going_down or setpoint_reached(sensor_data, current_setpoint):
+        if going_down or setpoint_reached(sensor_data, current_setpoint, margin=LANDPAD_TARGET_TOL):
             going_down = True
             prev_command[2] -= 0.02    #0.002
             #current_setpoint[2] = prev_command[2]
