@@ -10,6 +10,7 @@
 - [Results](#results)
 - [Obstacle Avoidance Algorithm](#obstacle-avoidance-algorithm)
 - [Video](#video)
+- [File Structure](#file-structure)
 
 ## Summary
 In this code we implemented a controller for the Crazyflie 2.0 open source drone to take off from a landing pad, navigate through obstacles, find a another landing pad, land, and then find its way back to the original landing pad. 
@@ -22,3 +23,6 @@ Our obstacle avoidance algorithm was made to be as simple and lightweight a poss
 
 ## Video
 https://www.youtube.com/watch?v=nqIxoirHC4E
+
+## File Structure
+You can find our controller in my_control.py
